@@ -1,0 +1,37 @@
+from cryptography.fernet import Fernet, InvalidToken
+
+from app.core.config import settings
+
+
+class EncryptionError(Exception):
+    pass
+
+
+def get_fernet() -> Fernet:
+    try:
+        return Fernet(
+            settings.license_encryption_key.encode("utf-8")
+        )
+    except Exception as exc:
+        raise EncryptionError(
+            "A chave de criptografia das licenças é inválida."
+        ) from exc
+
+
+def encrypt_license_key(value: str) -> str:
+    normalized = value.strip().upper()
+
+    return get_fernet().encrypt(
+        normalized.encode("utf-8")
+    ).decode("utf-8")
+
+
+def decrypt_license_key(value: str) -> str:
+    try:
+        return get_fernet().decrypt(
+            value.encode("utf-8")
+        ).decode("utf-8")
+    except InvalidToken as exc:
+        raise EncryptionError(
+            "Não foi possível descriptografar a licença."
+        ) from exc
