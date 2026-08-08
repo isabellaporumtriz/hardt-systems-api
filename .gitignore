@@ -160,7 +160,7 @@ develop-eggs/
 dist/
 dmypy.json
 docs/_build/
-downloads/
+/downloads/
 eggs/
 env.bak/
 env/
@@ -187,3 +187,7 @@ var/
 venv.bak/
 venv/
 wheels/
+
+# Backend downloads module
+!api/app/downloads/
+!api/app/downloads/**
