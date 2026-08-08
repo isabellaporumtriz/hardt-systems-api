@@ -9,6 +9,7 @@ from app.core.crypto import (
     decrypt_license_key,
 )
 from app.downloads import repositories as download_repositories
+from app.downloads.storage import generate_download_url
 from app.core.security import hash_password, verify_password
 from app.client.schemas import (
     ClientChargeItemResponse,
@@ -709,10 +710,15 @@ def get_client_download_access(
 
     release, _product = result
 
+    download_url = generate_download_url(
+        release.file_url,
+        file_name=release.file_name,
+    )
+
     return ClientDownloadAccessResponse(
         id=release.id,
         file_name=release.file_name,
-        file_url=release.file_url,
+        file_url=download_url,
     )
 
 

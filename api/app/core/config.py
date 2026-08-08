@@ -9,6 +9,13 @@ class Settings(BaseSettings):
     asaas_base_url: str = "https://api-sandbox.asaas.com/v3"
     asaas_api_key: str = ""
     asaas_webhook_token: str = ""
+
+    r2_account_id: str = ""
+    r2_access_key_id: str = ""
+    r2_secret_access_key: str = ""
+    r2_bucket_name: str = ""
+    r2_endpoint_url: str = ""
+    r2_presigned_expire_seconds: int = 300
     app_name: str = "Hardt Systems API"
     app_version: str = "1.0.0"
     debug: bool = True
