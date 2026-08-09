@@ -16,9 +16,12 @@ import {
 
 import { useAuth } from "@/components/providers/auth-provider";
 import { login } from "@/lib/api/auth";
+import { createMonthlyCheckout } from "@/lib/api/billing";
 import { registerUser } from "@/lib/api/registration";
 import { saveAccessToken } from "@/lib/auth";
 
+const HARDT_MEET_PRODUCT_SLUG =
+  "google-meet-robot";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -26,22 +29,32 @@ export default function RegisterPage() {
   const {
     user,
     isLoading,
-    refreshUser,
   } = useAuth();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+
+  const [cpfCnpj, setCpfCnpj] =
+    useState("");
+
+  const [mobilePhone, setMobilePhone] =
+    useState("");
+
   const [password, setPassword] =
     useState("");
+
   const [
     passwordConfirmation,
     setPasswordConfirmation,
   ] = useState("");
 
   const [error, setError] = useState("");
+
   const [isSubmitting, setIsSubmitting] =
     useState(false);
 
+  const [statusMessage, setStatusMessage] =
+    useState("");
 
   useEffect(() => {
     if (isLoading || !user) {
@@ -59,21 +72,52 @@ export default function RegisterPage() {
     router,
   ]);
 
+  function onlyDigits(value: string) {
+    return value.replace(/\D/g, "");
+  }
 
   async function handleSubmit(
-    event: FormEvent<HTMLFormElement>,
+    event: FormEvent,
   ) {
     event.preventDefault();
 
     setError("");
+    setStatusMessage("");
 
     const normalizedName = name.trim();
+
     const normalizedEmail =
       email.trim().toLowerCase();
+
+    const normalizedDocument =
+      onlyDigits(cpfCnpj);
+
+    const normalizedPhone =
+      onlyDigits(mobilePhone);
 
     if (normalizedName.length < 2) {
       setError(
         "Informe um nome com pelo menos 2 caracteres.",
+      );
+      return;
+    }
+
+    if (
+      normalizedDocument.length !== 11
+      && normalizedDocument.length !== 14
+    ) {
+      setError(
+        "Informe um CPF ou CNPJ válido.",
+      );
+      return;
+    }
+
+    if (
+      normalizedPhone.length !== 10
+      && normalizedPhone.length !== 11
+    ) {
+      setError(
+        "Informe um celular válido com DDD.",
       );
       return;
     }
@@ -85,7 +129,10 @@ export default function RegisterPage() {
       return;
     }
 
-    if (password !== passwordConfirmation) {
+    if (
+      password !==
+      passwordConfirmation
+    ) {
       setError(
         "As senhas informadas não são iguais.",
       );
@@ -95,73 +142,151 @@ export default function RegisterPage() {
     setIsSubmitting(true);
 
     try {
+      setStatusMessage(
+        "Criando sua conta...",
+      );
+
       await registerUser({
         name: normalizedName,
         email: normalizedEmail,
         password,
       });
 
-      const loginResult = await login({
-        email: normalizedEmail,
-        password,
-      });
+      setStatusMessage(
+        "Preparando seu acesso...",
+      );
+
+      const loginResult =
+        await login({
+          email: normalizedEmail,
+          password,
+        });
 
       saveAccessToken(
         loginResult.access_token,
       );
 
-      const currentUser =
-        await refreshUser();
+      setStatusMessage(
+        "Gerando sua cobrança...",
+      );
 
-      router.replace(
-        currentUser.is_admin
-          ? "/dashboard"
-          : "/portal/dashboard",
+      const checkout =
+        await createMonthlyCheckout({
+          product_slug:
+            HARDT_MEET_PRODUCT_SLUG,
+
+          cpf_cnpj:
+            normalizedDocument,
+
+          mobile_phone:
+            normalizedPhone,
+        });
+
+      if (!checkout.invoice_url) {
+        throw new Error(
+          "O checkout não retornou o link de pagamento.",
+        );
+      }
+
+      setStatusMessage(
+        "Tudo pronto. Abrindo pagamento...",
+      );
+
+      window.location.assign(
+        checkout.invoice_url,
       );
     } catch (requestError) {
-      if (axios.isAxiosError(requestError)) {
-        const detail =
-          requestError.response?.data?.detail;
+      console.error(
+        "ERRO CLIENTE ZERO:",
+        requestError,
+      );
 
-        if (typeof detail === "string") {
+      if (axios.isAxiosError(requestError)) {
+        console.error(
+          "STATUS:",
+          requestError.response?.status,
+        );
+
+        console.error(
+          "DATA:",
+          requestError.response?.data,
+        );
+
+        console.error(
+          "URL:",
+          requestError.config?.url,
+        );
+
+        console.error(
+          "BASE URL:",
+          requestError.config?.baseURL,
+        );
+      }
+      if (
+        axios.isAxiosError(
+          requestError,
+        )
+      ) {
+        const detail =
+          requestError.response
+            ?.data?.detail;
+
+        if (
+          typeof detail === "string"
+        ) {
           setError(detail);
+        } else if (
+          typeof detail === "object"
+          && detail !== null
+          && "message" in detail
+        ) {
+          setError(
+            String(detail.message),
+          );
         } else if (
           Array.isArray(detail)
           && detail.length > 0
         ) {
           setError(
             detail[0]?.msg
-              ?? "Não foi possível criar sua conta.",
+              ?? "Não foi possível continuar.",
           );
         } else {
           setError(
-            "Não foi possível criar sua conta.",
+            "Não foi possível concluir o cadastro e pagamento.",
           );
         }
+      } else if (
+        requestError instanceof Error
+      ) {
+        setError(
+          requestError.message,
+        );
       } else {
         setError(
-          "Não foi possível criar sua conta.",
+          "Não foi possível concluir o cadastro e pagamento.",
         );
       }
+
+      setStatusMessage("");
     } finally {
       setIsSubmitting(false);
     }
   }
 
-
   if (isLoading || user) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-zinc-950">
-        <LoaderCircle className="animate-spin text-violet-500" />
+      <main className="flex min-h-screen items-center justify-center bg-zinc-950 text-white">
+        <LoaderCircle
+          className="animate-spin text-violet-500"
+          size={28}
+        />
       </main>
     );
   }
 
-
   return (
-    <main className="flex min-h-screen items-center justify-center bg-zinc-950 px-6 py-12">
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_50%_-10%,rgba(124,58,237,0.18),transparent_35%)]" />
-
+    <main className="flex min-h-screen items-center justify-center bg-zinc-950 px-4 py-12 text-white">
       <section className="relative w-full max-w-md">
         <div className="mb-8 text-center">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-violet-500/30 bg-violet-500/10 text-violet-400">
@@ -177,7 +302,8 @@ export default function RegisterPage() {
           </h1>
 
           <p className="mt-2 text-sm text-zinc-500">
-            Crie sua conta no Hardt OS.
+            Crie sua conta e continue
+            para o pagamento do Hardt Meet.
           </p>
         </div>
 
@@ -202,7 +328,9 @@ export default function RegisterPage() {
               autoComplete="name"
               value={name}
               onChange={(event) =>
-                setName(event.target.value)
+                setName(
+                  event.target.value,
+                )
               }
               placeholder="Seu nome"
               className="mt-2 h-12 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-violet-500"
@@ -224,9 +352,60 @@ export default function RegisterPage() {
               autoComplete="email"
               value={email}
               onChange={(event) =>
-                setEmail(event.target.value)
+                setEmail(
+                  event.target.value,
+                )
               }
               placeholder="seu@email.com"
+              className="mt-2 h-12 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-violet-500"
+            />
+          </div>
+
+          <div className="mt-5">
+            <label
+              htmlFor="cpfCnpj"
+              className="text-sm font-medium text-zinc-300"
+            >
+              CPF ou CNPJ
+            </label>
+
+            <input
+              id="cpfCnpj"
+              type="text"
+              required
+              inputMode="numeric"
+              value={cpfCnpj}
+              onChange={(event) =>
+                setCpfCnpj(
+                  event.target.value,
+                )
+              }
+              placeholder="CPF ou CNPJ"
+              className="mt-2 h-12 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-violet-500"
+            />
+          </div>
+
+          <div className="mt-5">
+            <label
+              htmlFor="mobilePhone"
+              className="text-sm font-medium text-zinc-300"
+            >
+              Celular
+            </label>
+
+            <input
+              id="mobilePhone"
+              type="tel"
+              required
+              inputMode="tel"
+              autoComplete="tel"
+              value={mobilePhone}
+              onChange={(event) =>
+                setMobilePhone(
+                  event.target.value,
+                )
+              }
+              placeholder="(11) 99999-9999"
               className="mt-2 h-12 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-violet-500"
             />
           </div>
@@ -248,7 +427,9 @@ export default function RegisterPage() {
               autoComplete="new-password"
               value={password}
               onChange={(event) =>
-                setPassword(event.target.value)
+                setPassword(
+                  event.target.value,
+                )
               }
               placeholder="Mínimo de 8 caracteres"
               className="mt-2 h-12 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-violet-500"
@@ -270,7 +451,9 @@ export default function RegisterPage() {
               minLength={8}
               maxLength={128}
               autoComplete="new-password"
-              value={passwordConfirmation}
+              value={
+                passwordConfirmation
+              }
               onChange={(event) =>
                 setPasswordConfirmation(
                   event.target.value,
@@ -287,6 +470,12 @@ export default function RegisterPage() {
             </div>
           )}
 
+          {statusMessage && (
+            <div className="mt-5 rounded-xl border border-violet-500/20 bg-violet-500/10 px-4 py-3 text-sm text-violet-300">
+              {statusMessage}
+            </div>
+          )}
+
           <button
             type="submit"
             disabled={isSubmitting}
@@ -298,12 +487,12 @@ export default function RegisterPage() {
                   size={18}
                   className="animate-spin"
                 />
-                Criando conta...
+                Processando...
               </>
             ) : (
               <>
                 <KeyRound size={18} />
-                Criar minha conta
+                Criar conta e continuar
               </>
             )}
           </button>
