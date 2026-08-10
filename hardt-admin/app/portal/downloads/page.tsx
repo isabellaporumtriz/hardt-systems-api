@@ -223,19 +223,19 @@ export default function DownloadsPage() {
   const totalPages = data?.pages ?? 0;
 
   return (
-    <div className="min-h-full text-[#211633]">
+    <div className="min-h-full text-white">
       <div className="mx-auto w-full max-w-[1500px] space-y-6">
         <header className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="text-sm font-bold uppercase tracking-wide text-[#7c2cff]">
+            <p className="text-sm font-bold uppercase tracking-wide text-violet-400">
               Central de arquivos
             </p>
 
-            <h1 className="mt-2 text-3xl font-bold tracking-tight text-[#211633] md:text-4xl">
+            <h1 className="mt-2 text-3xl font-bold tracking-tight text-white md:text-4xl">
               Downloads
             </h1>
 
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6f687c]">
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/45">
               Baixe os produtos disponíveis para suas licenças
               e acesse sempre as versões mais recentes.
             </p>
@@ -245,7 +245,7 @@ export default function DownloadsPage() {
             type="button"
             disabled={isRefreshing}
             onClick={() => void loadDownloads(true)}
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[#e6dff0] bg-white px-4 text-sm font-semibold text-[#4a4058] shadow-sm transition hover:border-[#b897f5] hover:bg-[#f8f4ff] disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-white/[0.08] bg-[#111116] px-4 text-sm font-semibold text-white/70 shadow-sm transition hover:border-violet-500/40 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-60"
           >
             <RefreshCw
               className={`h-4 w-4 ${
@@ -258,67 +258,67 @@ export default function DownloadsPage() {
         </header>
 
         <section className="grid gap-4 md:grid-cols-3">
-          <article className="rounded-2xl border border-[#ebe6f2] bg-white p-5 shadow-[0_12px_35px_rgba(48,31,77,0.06)]">
+          <article className="rounded-[24px] border border-white/[0.07] bg-[#111116] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.18)]">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-sm text-[#6f687c]">
+                <p className="text-sm text-white/45">
                   Downloads disponíveis
                 </p>
 
-                <p className="mt-3 text-3xl font-bold tracking-tight text-[#211633]">
+                <p className="mt-3 text-3xl font-bold tracking-tight text-white">
                   {summary.total}
                 </p>
 
-                <p className="mt-1 text-xs text-[#81798d]">
+                <p className="mt-1 text-xs text-white/35">
                   Arquivos liberados para sua conta
                 </p>
               </div>
 
-              <div className="rounded-xl border border-[#dccdff] bg-[#f1eaff] p-3 text-[#7c2cff]">
+              <div className="rounded-xl border border-violet-400/20 bg-violet-500/10 p-3 text-violet-400">
                 <HardDriveDownload className="h-5 w-5" />
               </div>
             </div>
           </article>
 
-          <article className="rounded-2xl border border-[#ebe6f2] bg-white p-5 shadow-[0_12px_35px_rgba(48,31,77,0.06)]">
+          <article className="rounded-[24px] border border-white/[0.07] bg-[#111116] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.18)]">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-sm text-[#6f687c]">
+                <p className="text-sm text-white/45">
                   Produtos
                 </p>
 
-                <p className="mt-3 text-3xl font-bold tracking-tight text-[#211633]">
+                <p className="mt-3 text-3xl font-bold tracking-tight text-white">
                   {summary.products}
                 </p>
 
-                <p className="mt-1 text-xs text-[#81798d]">
+                <p className="mt-1 text-xs text-white/35">
                   Produtos vinculados às suas licenças
                 </p>
               </div>
 
-              <div className="rounded-xl border border-[#dccdff] bg-[#f1eaff] p-3 text-[#7c2cff]">
+              <div className="rounded-xl border border-violet-400/20 bg-violet-500/10 p-3 text-violet-400">
                 <Package className="h-5 w-5" />
               </div>
             </div>
           </article>
 
-          <article className="rounded-2xl border border-[#ebe6f2] bg-white p-5 shadow-[0_12px_35px_rgba(48,31,77,0.06)]">
+          <article className="rounded-[24px] border border-white/[0.07] bg-[#111116] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.18)]">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-sm text-[#6f687c]">
+                <p className="text-sm text-white/45">
                   Plataformas
                 </p>
 
-                <p className="mt-3 text-3xl font-bold tracking-tight text-[#211633]">
+                <p className="mt-3 text-3xl font-bold tracking-tight text-white">
                   {summary.platforms}
                 </p>
 
-                <p className="mt-1 text-xs text-[#81798d]">
+                <p className="mt-1 text-xs text-white/35">
                   Sistemas operacionais disponíveis
                 </p>
               </div>
 
-              <div className="rounded-xl border border-[#dccdff] bg-[#f1eaff] p-3 text-[#7c2cff]">
+              <div className="rounded-xl border border-violet-400/20 bg-violet-500/10 p-3 text-violet-400">
                 <Monitor className="h-5 w-5" />
               </div>
             </div>
@@ -326,17 +326,17 @@ export default function DownloadsPage() {
         </section>
 
         {error ? (
-          <div className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className="flex items-start gap-3 rounded-2xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
             <CircleAlert className="mt-0.5 h-5 w-5 shrink-0" />
 
             <span>{error}</span>
           </div>
         ) : null}
 
-        <section className="overflow-hidden rounded-2xl border border-[#ebe6f2] bg-white shadow-[0_16px_45px_rgba(48,31,77,0.07)]">
-          <div className="space-y-4 border-b border-[#eee9f4] p-4 lg:flex lg:items-center lg:justify-between lg:space-y-0">
+        <section className="overflow-hidden rounded-[24px] border border-white/[0.07] bg-[#111116] shadow-[0_18px_60px_rgba(0,0,0,0.18)]">
+          <div className="space-y-4 border-b border-white/[0.06] p-4 lg:flex lg:items-center lg:justify-between lg:space-y-0">
             <div className="relative w-full lg:max-w-md">
-              <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8c8497]" />
+              <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" />
 
               <input
                 value={searchInput}
@@ -344,11 +344,11 @@ export default function DownloadsPage() {
                   setSearchInput(event.target.value)
                 }
                 placeholder="Buscar produto, versão ou arquivo..."
-                className="h-11 w-full rounded-xl border border-[#ded7e7] bg-[#fbfaff] pl-10 pr-4 text-sm text-[#211633] outline-none transition placeholder:text-[#96909f] focus:border-[#8a3ffc] focus:ring-2 focus:ring-[#8a3ffc]/10"
+                className="h-11 w-full rounded-xl border border-white/[0.09] bg-white/[0.035] pl-10 pr-4 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-violet-500 focus:ring-2 focus:ring-violet-500/15"
               />
             </div>
 
-            <div className="flex max-w-full overflow-x-auto rounded-xl border border-[#e4deeb] bg-[#f3f0f6] p-1">
+            <div className="flex max-w-full overflow-x-auto rounded-xl border border-white/[0.08] bg-white/[0.04] p-1">
               {PLATFORM_FILTERS.map((filter) => {
                 const isSelected =
                   platform === filter.value;
@@ -362,8 +362,8 @@ export default function DownloadsPage() {
                     }
                     className={`h-9 shrink-0 rounded-lg px-4 text-sm font-semibold transition ${
                       isSelected
-                        ? "bg-[#7c2cff] text-white shadow-md shadow-purple-200"
-                        : "text-[#81798d] hover:text-[#211633]"
+                        ? "bg-violet-600 text-white shadow-md shadow-violet-950/40"
+                        : "text-white/35 hover:text-white"
                     }`}
                   >
                     {filter.label}
@@ -375,23 +375,23 @@ export default function DownloadsPage() {
 
           {isLoading ? (
             <div className="flex min-h-[380px] flex-col items-center justify-center gap-3 px-6 py-16 text-center">
-              <LoaderCircle className="h-8 w-8 animate-spin text-[#7c2cff]" />
+              <LoaderCircle className="h-8 w-8 animate-spin text-violet-400" />
 
-              <p className="text-sm font-medium text-[#6f687c]">
+              <p className="text-sm font-medium text-white/45">
                 Carregando seus downloads...
               </p>
             </div>
           ) : items.length === 0 ? (
             <div className="flex min-h-[400px] flex-col items-center justify-center px-6 py-16 text-center">
-              <div className="rounded-2xl border border-[#dccdff] bg-[#f1eaff] p-4 text-[#7c2cff]">
+              <div className="rounded-2xl border border-violet-400/20 bg-violet-500/10 p-4 text-violet-400">
                 <Archive className="h-8 w-8" />
               </div>
 
-              <h2 className="mt-5 text-lg font-bold text-[#211633]">
+              <h2 className="mt-5 text-lg font-bold text-white">
                 Nenhum download encontrado
               </h2>
 
-              <p className="mt-2 max-w-md text-sm leading-6 text-[#756d80]">
+              <p className="mt-2 max-w-md text-sm leading-6 text-white/40">
                 Quando um arquivo estiver disponível para os
                 produtos das suas licenças, ele aparecerá aqui.
               </p>
@@ -401,78 +401,78 @@ export default function DownloadsPage() {
               {items.map((item) => (
                 <article
                   key={item.id}
-                  className="flex min-h-[310px] flex-col rounded-2xl border border-[#ebe6f2] bg-[#fdfcff] p-5 transition hover:-translate-y-0.5 hover:border-[#d8c5fb] hover:shadow-[0_15px_35px_rgba(76,42,125,0.08)]"
+                  className="flex min-h-[310px] flex-col rounded-[24px] border border-white/[0.07] bg-[#111116] p-5 transition hover:-translate-y-0.5 hover:border-violet-500/30 hover:shadow-[0_15px_35px_rgba(76,42,125,0.08)]"
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex min-w-0 items-center gap-3">
-                      <div className="shrink-0 rounded-xl border border-[#dccdff] bg-[#f1eaff] p-3 text-[#7c2cff]">
+                      <div className="shrink-0 rounded-xl border border-violet-400/20 bg-violet-500/10 p-3 text-violet-400">
                         <FileArchive className="h-5 w-5" />
                       </div>
 
                       <div className="min-w-0">
-                        <h2 className="truncate font-bold text-[#211633]">
+                        <h2 className="truncate font-bold text-white">
                           {item.product_name}
                         </h2>
 
-                        <p className="mt-1 truncate text-xs text-[#81798d]">
+                        <p className="mt-1 truncate text-xs text-white/35">
                           {item.file_name}
                         </p>
                       </div>
                     </div>
 
-                    <span className="shrink-0 rounded-full border border-[#ded1f9] bg-[#f4edff] px-2.5 py-1 text-xs font-bold text-[#7133d5]">
+                    <span className="shrink-0 rounded-full border border-violet-400/20 bg-violet-500/10 px-2.5 py-1 text-xs font-bold text-violet-300">
                       v{item.version}
                     </span>
                   </div>
 
                   <div className="mt-5 grid grid-cols-2 gap-3">
-                    <div className="rounded-xl border border-[#eee9f4] bg-white p-3">
-                      <p className="text-xs text-[#81798d]">
+                    <div className="rounded-xl border border-white/[0.06] bg-[#111116] p-3">
+                      <p className="text-xs text-white/35">
                         Plataforma
                       </p>
 
-                      <p className="mt-1 text-sm font-semibold text-[#393044]">
+                      <p className="mt-1 text-sm font-semibold text-white/80">
                         {getPlatformLabel(item.platform)}
                       </p>
                     </div>
 
-                    <div className="rounded-xl border border-[#eee9f4] bg-white p-3">
-                      <p className="text-xs text-[#81798d]">
+                    <div className="rounded-xl border border-white/[0.06] bg-[#111116] p-3">
+                      <p className="text-xs text-white/35">
                         Arquitetura
                       </p>
 
-                      <p className="mt-1 text-sm font-semibold text-[#393044]">
+                      <p className="mt-1 text-sm font-semibold text-white/80">
                         {item.architecture || "Universal"}
                       </p>
                     </div>
 
-                    <div className="rounded-xl border border-[#eee9f4] bg-white p-3">
-                      <p className="text-xs text-[#81798d]">
+                    <div className="rounded-xl border border-white/[0.06] bg-[#111116] p-3">
+                      <p className="text-xs text-white/35">
                         Tamanho
                       </p>
 
-                      <p className="mt-1 text-sm font-semibold text-[#393044]">
+                      <p className="mt-1 text-sm font-semibold text-white/80">
                         {formatFileSize(item.file_size_bytes)}
                       </p>
                     </div>
 
-                    <div className="rounded-xl border border-[#eee9f4] bg-white p-3">
-                      <p className="text-xs text-[#81798d]">
+                    <div className="rounded-xl border border-white/[0.06] bg-[#111116] p-3">
+                      <p className="text-xs text-white/35">
                         Publicação
                       </p>
 
-                      <p className="mt-1 text-sm font-semibold text-[#393044]">
+                      <p className="mt-1 text-sm font-semibold text-white/80">
                         {formatDate(item.published_at)}
                       </p>
                     </div>
                   </div>
 
                   {item.release_notes ? (
-                    <p className="mt-4 line-clamp-2 text-sm leading-6 text-[#6f687c]">
+                    <p className="mt-4 line-clamp-2 text-sm leading-6 text-white/45">
                       {item.release_notes}
                     </p>
                   ) : (
-                    <p className="mt-4 text-sm leading-6 text-[#81798d]">
+                    <p className="mt-4 text-sm leading-6 text-white/35">
                       Versão pronta para instalação.
                     </p>
                   )}
@@ -483,7 +483,7 @@ export default function DownloadsPage() {
                     onClick={() =>
                       void handleDownload(item)
                     }
-                    className="mt-auto inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#7c2cff] px-4 text-sm font-bold text-white shadow-lg shadow-purple-200 transition hover:bg-[#6b20e8] disabled:cursor-not-allowed disabled:opacity-60"
+                    className="mt-auto inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 text-sm font-bold text-white shadow-lg shadow-violet-950/40 transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {downloadingId === item.id ? (
                       <LoaderCircle className="h-4 w-4 animate-spin" />
@@ -501,8 +501,8 @@ export default function DownloadsPage() {
           )}
 
           {!isLoading && items.length > 0 ? (
-            <footer className="flex flex-col gap-3 border-t border-[#eee9f4] p-4 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm text-[#756d80]">
+            <footer className="flex flex-col gap-3 border-t border-white/[0.06] p-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-white/40">
                 Exibindo {items.length} de {data?.total ?? 0}{" "}
                 arquivos
               </p>
@@ -516,13 +516,13 @@ export default function DownloadsPage() {
                       Math.max(1, current - 1),
                     )
                   }
-                  className="inline-flex h-9 items-center gap-1 rounded-lg border border-[#ded7e7] bg-white px-3 text-sm font-semibold text-[#51495d] transition hover:bg-[#f6f2fb] disabled:cursor-not-allowed disabled:opacity-40"
+                  className="inline-flex h-9 items-center gap-1 rounded-lg border border-white/[0.09] bg-[#111116] px-3 text-sm font-semibold text-white/55 transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <ChevronLeft className="h-4 w-4" />
                   Anterior
                 </button>
 
-                <span className="px-2 text-sm font-semibold text-[#51495d]">
+                <span className="px-2 text-sm font-semibold text-white/55">
                   {page} de {Math.max(totalPages, 1)}
                 </span>
 
@@ -535,7 +535,7 @@ export default function DownloadsPage() {
                   onClick={() =>
                     setPage((current) => current + 1)
                   }
-                  className="inline-flex h-9 items-center gap-1 rounded-lg border border-[#ded7e7] bg-white px-3 text-sm font-semibold text-[#51495d] transition hover:bg-[#f6f2fb] disabled:cursor-not-allowed disabled:opacity-40"
+                  className="inline-flex h-9 items-center gap-1 rounded-lg border border-white/[0.09] bg-[#111116] px-3 text-sm font-semibold text-white/55 transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   Próxima
                   <ChevronRight className="h-4 w-4" />
@@ -545,10 +545,10 @@ export default function DownloadsPage() {
           ) : null}
         </section>
 
-        <div className="flex items-start gap-3 rounded-2xl border border-[#e6dff0] bg-[#faf8fd] p-4">
-          <Box className="mt-0.5 h-5 w-5 shrink-0 text-[#7c2cff]" />
+        <div className="flex items-start gap-3 rounded-2xl border border-white/[0.08] bg-[#111116] p-4">
+          <Box className="mt-0.5 h-5 w-5 shrink-0 text-violet-400" />
 
-          <p className="text-sm leading-6 text-[#6f687c]">
+          <p className="text-sm leading-6 text-white/45">
             Somente produtos vinculados a licenças ativas ou
             aguardando ativação serão exibidos nesta página.
           </p>

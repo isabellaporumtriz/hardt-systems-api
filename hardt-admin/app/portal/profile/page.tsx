@@ -259,9 +259,9 @@ export default function ProfilePage() {
     return (
       <div className="flex min-h-[65vh] items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <LoaderCircle className="h-8 w-8 animate-spin text-[#7c2cff]" />
+          <LoaderCircle className="h-8 w-8 animate-spin text-violet-400" />
 
-          <p className="text-sm font-medium text-[#6f687c]">
+          <p className="text-sm font-medium text-white/45">
             Carregando perfil...
           </p>
         </div>
@@ -270,25 +270,25 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="min-h-full text-[#211633]">
+    <div className="min-h-full text-white">
       <div className="mx-auto w-full max-w-[1500px] space-y-6">
         <header>
-          <p className="text-sm font-bold uppercase tracking-wide text-[#7c2cff]">
+          <p className="text-sm font-bold uppercase tracking-wide text-violet-400">
             Minha conta
           </p>
 
-          <h1 className="mt-2 text-3xl font-bold tracking-tight text-[#211633] md:text-4xl">
+          <h1 className="mt-2 text-3xl font-bold tracking-tight text-white md:text-4xl">
             Perfil
           </h1>
 
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6f687c]">
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-white/45">
             Atualize seus dados pessoais e gerencie a segurança
             da sua conta Hardt Systems.
           </p>
         </header>
 
         {profileError && !profile ? (
-          <div className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className="flex items-start gap-3 rounded-2xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
             <CircleAlert className="mt-0.5 h-5 w-5 shrink-0" />
             <span>{profileError}</span>
           </div>
@@ -296,7 +296,7 @@ export default function ProfilePage() {
 
         <section className="grid gap-6 xl:grid-cols-[0.75fr_1.25fr]">
           <aside className="space-y-6">
-            <article className="overflow-hidden rounded-2xl border border-[#ebe6f2] bg-white shadow-[0_16px_45px_rgba(48,31,77,0.07)]">
+            <article className="overflow-hidden rounded-[24px] border border-white/[0.07] bg-[#111116] shadow-[0_18px_60px_rgba(0,0,0,0.18)]">
               <div className="bg-gradient-to-br from-[#341070] via-[#4c1d95] to-[#7c2cff] px-6 py-8 text-white">
                 <div className="flex h-20 w-20 items-center justify-center rounded-2xl border border-white/20 bg-white/15 text-2xl font-black shadow-xl backdrop-blur">
                   {initials}
@@ -314,9 +314,9 @@ export default function ProfilePage() {
               <div className="divide-y divide-[#eee9f4]">
                 <div className="flex items-center justify-between gap-4 px-6 py-4">
                   <div className="flex items-center gap-3">
-                    <ShieldCheck className="h-5 w-5 text-[#7c2cff]" />
+                    <ShieldCheck className="h-5 w-5 text-violet-400" />
 
-                    <span className="text-sm text-[#6f687c]">
+                    <span className="text-sm text-white/45">
                       Status da conta
                     </span>
                   </div>
@@ -324,8 +324,8 @@ export default function ProfilePage() {
                   <span
                     className={`rounded-full border px-3 py-1 text-xs font-bold ${
                       profile?.is_active
-                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                        : "border-red-200 bg-red-50 text-red-700"
+                        ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-300"
+                        : "border-red-400/20 bg-red-500/10 text-red-300"
                     }`}
                   >
                     {profile?.is_active
@@ -336,14 +336,14 @@ export default function ProfilePage() {
 
                 <div className="flex items-center justify-between gap-4 px-6 py-4">
                   <div className="flex items-center gap-3">
-                    <CalendarDays className="h-5 w-5 text-[#7c2cff]" />
+                    <CalendarDays className="h-5 w-5 text-violet-400" />
 
-                    <span className="text-sm text-[#6f687c]">
+                    <span className="text-sm text-white/45">
                       Conta criada
                     </span>
                   </div>
 
-                  <span className="text-right text-sm font-semibold text-[#393044]">
+                  <span className="text-right text-sm font-semibold text-white/80">
                     {profile
                       ? formatDate(profile.created_at)
                       : "Não informado"}
@@ -352,14 +352,14 @@ export default function ProfilePage() {
 
                 <div className="flex items-center justify-between gap-4 px-6 py-4">
                   <div className="flex items-center gap-3">
-                    <CalendarDays className="h-5 w-5 text-[#7c2cff]" />
+                    <CalendarDays className="h-5 w-5 text-violet-400" />
 
-                    <span className="text-sm text-[#6f687c]">
+                    <span className="text-sm text-white/45">
                       Última atualização
                     </span>
                   </div>
 
-                  <span className="text-right text-sm font-semibold text-[#393044]">
+                  <span className="text-right text-sm font-semibold text-white/80">
                     {profile
                       ? formatDate(profile.updated_at)
                       : "Não informado"}
@@ -368,16 +368,16 @@ export default function ProfilePage() {
               </div>
             </article>
 
-            <article className="rounded-2xl border border-[#e6dff0] bg-[#faf8fd] p-5">
+            <article className="rounded-2xl border border-white/[0.08] bg-[#111116] p-5">
               <div className="flex items-start gap-3">
-                <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[#7c2cff]" />
+                <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-violet-400" />
 
                 <div>
-                  <h3 className="font-bold text-[#211633]">
+                  <h3 className="font-bold text-white">
                     Conta protegida
                   </h3>
 
-                  <p className="mt-2 text-sm leading-6 text-[#6f687c]">
+                  <p className="mt-2 text-sm leading-6 text-white/45">
                     Sua senha é armazenada de forma criptografada.
                     Nunca compartilhe suas credenciais de acesso.
                   </p>
@@ -389,19 +389,19 @@ export default function ProfilePage() {
           <div className="space-y-6">
             <form
               onSubmit={handleProfileSubmit}
-              className="overflow-hidden rounded-2xl border border-[#ebe6f2] bg-white shadow-[0_16px_45px_rgba(48,31,77,0.07)]"
+              className="overflow-hidden rounded-[24px] border border-white/[0.07] bg-[#111116] shadow-[0_18px_60px_rgba(0,0,0,0.18)]"
             >
-              <div className="flex items-center gap-3 border-b border-[#eee9f4] px-6 py-5">
-                <div className="rounded-xl border border-[#dccdff] bg-[#f1eaff] p-3 text-[#7c2cff]">
+              <div className="flex items-center gap-3 border-b border-white/[0.06] px-6 py-5">
+                <div className="rounded-xl border border-violet-400/20 bg-violet-500/10 p-3 text-violet-400">
                   <UserRound className="h-5 w-5" />
                 </div>
 
                 <div>
-                  <h2 className="text-lg font-bold text-[#211633]">
+                  <h2 className="text-lg font-bold text-white">
                     Dados pessoais
                   </h2>
 
-                  <p className="mt-1 text-sm text-[#81798d]">
+                  <p className="mt-1 text-sm text-white/35">
                     Informações usadas para identificar sua conta.
                   </p>
                 </div>
@@ -411,13 +411,13 @@ export default function ProfilePage() {
                 <div>
                   <label
                     htmlFor="name"
-                    className="text-sm font-semibold text-[#393044]"
+                    className="text-sm font-semibold text-white/80"
                   >
                     Nome
                   </label>
 
                   <div className="relative mt-2">
-                    <UserRound className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8c8497]" />
+                    <UserRound className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" />
 
                     <input
                       id="name"
@@ -428,7 +428,7 @@ export default function ProfilePage() {
                       minLength={2}
                       maxLength={120}
                       required
-                      className="h-12 w-full rounded-xl border border-[#ded7e7] bg-[#fbfaff] pl-10 pr-4 text-sm text-[#211633] outline-none transition placeholder:text-[#96909f] focus:border-[#8a3ffc] focus:ring-2 focus:ring-[#8a3ffc]/10"
+                      className="h-12 w-full rounded-xl border border-white/[0.09] bg-white/[0.035] pl-10 pr-4 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-violet-500 focus:ring-2 focus:ring-violet-500/15"
                     />
                   </div>
                 </div>
@@ -436,13 +436,13 @@ export default function ProfilePage() {
                 <div>
                   <label
                     htmlFor="email"
-                    className="text-sm font-semibold text-[#393044]"
+                    className="text-sm font-semibold text-white/80"
                   >
                     E-mail
                   </label>
 
                   <div className="relative mt-2">
-                    <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8c8497]" />
+                    <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" />
 
                     <input
                       id="email"
@@ -452,20 +452,20 @@ export default function ProfilePage() {
                         setEmail(event.target.value)
                       }
                       required
-                      className="h-12 w-full rounded-xl border border-[#ded7e7] bg-[#fbfaff] pl-10 pr-4 text-sm text-[#211633] outline-none transition placeholder:text-[#96909f] focus:border-[#8a3ffc] focus:ring-2 focus:ring-[#8a3ffc]/10"
+                      className="h-12 w-full rounded-xl border border-white/[0.09] bg-white/[0.035] pl-10 pr-4 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-violet-500 focus:ring-2 focus:ring-violet-500/15"
                     />
                   </div>
                 </div>
 
                 {profileError && profile ? (
-                  <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  <div className="flex items-start gap-3 rounded-xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
                     <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
                     <span>{profileError}</span>
                   </div>
                 ) : null}
 
                 {profileSuccess ? (
-                  <div className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                  <div className="flex items-start gap-3 rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
                     <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
                     <span>{profileSuccess}</span>
                   </div>
@@ -474,7 +474,7 @@ export default function ProfilePage() {
                 <button
                   type="submit"
                   disabled={isSavingProfile}
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#7c2cff] px-5 text-sm font-bold text-white shadow-lg shadow-purple-200 transition hover:bg-[#6b20e8] disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-violet-600 px-5 text-sm font-bold text-white shadow-lg shadow-violet-950/40 transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {isSavingProfile ? (
                     <LoaderCircle className="h-4 w-4 animate-spin" />
@@ -491,19 +491,19 @@ export default function ProfilePage() {
 
             <form
               onSubmit={handlePasswordSubmit}
-              className="overflow-hidden rounded-2xl border border-[#ebe6f2] bg-white shadow-[0_16px_45px_rgba(48,31,77,0.07)]"
+              className="overflow-hidden rounded-[24px] border border-white/[0.07] bg-[#111116] shadow-[0_18px_60px_rgba(0,0,0,0.18)]"
             >
-              <div className="flex items-center gap-3 border-b border-[#eee9f4] px-6 py-5">
-                <div className="rounded-xl border border-[#dccdff] bg-[#f1eaff] p-3 text-[#7c2cff]">
+              <div className="flex items-center gap-3 border-b border-white/[0.06] px-6 py-5">
+                <div className="rounded-xl border border-violet-400/20 bg-violet-500/10 p-3 text-violet-400">
                   <LockKeyhole className="h-5 w-5" />
                 </div>
 
                 <div>
-                  <h2 className="text-lg font-bold text-[#211633]">
+                  <h2 className="text-lg font-bold text-white">
                     Segurança
                   </h2>
 
-                  <p className="mt-1 text-sm text-[#81798d]">
+                  <p className="mt-1 text-sm text-white/35">
                     Atualize sua senha de acesso ao portal.
                   </p>
                 </div>
@@ -550,14 +550,14 @@ export default function ProfilePage() {
                 />
 
                 {passwordError ? (
-                  <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  <div className="flex items-start gap-3 rounded-xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
                     <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
                     <span>{passwordError}</span>
                   </div>
                 ) : null}
 
                 {passwordSuccess ? (
-                  <div className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                  <div className="flex items-start gap-3 rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
                     <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
                     <span>{passwordSuccess}</span>
                   </div>
@@ -566,7 +566,7 @@ export default function ProfilePage() {
                 <button
                   type="submit"
                   disabled={isSavingPassword}
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#211633] px-5 text-sm font-bold text-white transition hover:bg-[#36264e] disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-violet-600 px-5 text-sm font-bold text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {isSavingPassword ? (
                     <LoaderCircle className="h-4 w-4 animate-spin" />
@@ -608,13 +608,13 @@ function PasswordField({
     <div>
       <label
         htmlFor={id}
-        className="text-sm font-semibold text-[#393044]"
+        className="text-sm font-semibold text-white/80"
       >
         {label}
       </label>
 
       <div className="relative mt-2">
-        <LockKeyhole className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8c8497]" />
+        <LockKeyhole className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" />
 
         <input
           id={id}
@@ -631,7 +631,7 @@ function PasswordField({
               ? "current-password"
               : "new-password"
           }
-          className="h-12 w-full rounded-xl border border-[#ded7e7] bg-[#fbfaff] pl-10 pr-12 text-sm text-[#211633] outline-none transition placeholder:text-[#96909f] focus:border-[#8a3ffc] focus:ring-2 focus:ring-[#8a3ffc]/10"
+          className="h-12 w-full rounded-xl border border-white/[0.09] bg-white/[0.035] pl-10 pr-12 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-violet-500 focus:ring-2 focus:ring-violet-500/15"
         />
 
         <button
@@ -640,7 +640,7 @@ function PasswordField({
           aria-label={
             show ? "Ocultar senha" : "Mostrar senha"
           }
-          className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-[#81798d] transition hover:bg-[#f1eaff] hover:text-[#7c2cff]"
+          className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-white/35 transition hover:bg-violet-500/10 hover:text-violet-400"
         >
           {show ? (
             <EyeOff className="h-4 w-4" />
