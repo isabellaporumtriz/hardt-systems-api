@@ -122,7 +122,7 @@ function statusClass(
     pending_activation:
       "border border-amber-400/20 bg-amber-400/10 text-amber-300",
     expired:
-      "border border-white/10 bg-white/[0.05] text-white/50",
+      "border border-white/10 bg-[#15151c] text-white/50",
     suspended:
       "border border-orange-400/20 bg-orange-400/10 text-orange-300",
     revoked:
@@ -142,7 +142,7 @@ function SummaryCard({
   icon: typeof KeyRound;
 }) {
   return (
-    <article className="rounded-[22px] border border-white/[0.07] bg-white/[0.035] p-5 shadow-[0_16px_50px_rgba(0,0,0,0.18)] backdrop-blur-sm">
+    <article className="rounded-[22px] border border-white/[0.07] bg-[#111116] p-5 shadow-[0_16px_50px_rgba(0,0,0,0.18)] backdrop-blur-sm">
       <div className="flex items-center gap-4">
         <div className="flex h-12 w-12 items-center justify-center rounded-full border border-violet-400/15 bg-violet-500/10 text-violet-300">
           <Icon size={22} />
@@ -381,7 +381,7 @@ function LicenseRow({
 
             <Link
               href="/portal/downloads"
-              className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-bold text-white/70 transition hover:border-violet-500/30 hover:bg-violet-500/10 hover:text-white"
+              className="rounded-lg border border-white/10 bg-[#121218] px-3 py-2 text-xs font-bold text-white/70 transition hover:border-violet-500/30 hover:bg-violet-500/10 hover:text-white"
             >
               Baixar robô
             </Link>
@@ -600,7 +600,7 @@ export default function PortalLicensesPage() {
         />
       </section>
 
-      <section className="mt-6 rounded-[24px] border border-white/[0.07] bg-white/[0.035] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.18)] backdrop-blur-sm">
+      <section className="mt-6 rounded-[24px] border border-white/[0.07] bg-[#111116] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.18)] backdrop-blur-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <form
             onSubmit={handleSearch}
@@ -620,7 +620,7 @@ export default function PortalLicensesPage() {
                   )
                 }
                 placeholder="Buscar por produto, licença ou chave"
-                className="h-12 w-full rounded-xl border border-white/[0.08] bg-white/[0.035] pl-11 pr-4 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-violet-500/50 focus:ring-4 focus:ring-violet-500/10"
+                className="h-12 w-full rounded-xl border border-white/[0.08] bg-[#111116] pl-11 pr-4 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-violet-500/50 focus:ring-4 focus:ring-violet-500/10"
               />
             </div>
 
@@ -658,7 +658,7 @@ export default function PortalLicensesPage() {
         </div>
       </section>
 
-      <section className="mt-6 overflow-hidden rounded-[24px] border border-white/[0.07] bg-white/[0.035] shadow-[0_18px_60px_rgba(0,0,0,0.18)] backdrop-blur-sm">
+      <section className="mt-6 overflow-hidden rounded-[24px] border border-white/[0.07] bg-[#111116] shadow-[0_18px_60px_rgba(0,0,0,0.18)] backdrop-blur-sm">
         <div className="flex items-center justify-between border-b border-white/[0.06] px-6 py-5">
           <div>
             <h2 className="text-lg font-black text-white">
@@ -764,7 +764,7 @@ export default function PortalLicensesPage() {
                     ),
                   )
                 }
-                className="flex h-10 items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.035] px-4 text-sm font-semibold text-white/65 disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex h-10 items-center gap-2 rounded-xl border border-white/[0.08] bg-[#111116] px-4 text-sm font-semibold text-white/65 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <ArrowLeft size={15} />
                 Anterior

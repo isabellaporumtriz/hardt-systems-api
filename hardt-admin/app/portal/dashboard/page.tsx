@@ -311,7 +311,7 @@ export default function PortalDashboardPage() {
           return (
             <article
               key={card.title}
-              className="rounded-[24px] border border-white/[0.07] bg-white/[0.035] p-6 shadow-[0_18px_60px_rgba(0,0,0,0.18)] backdrop-blur-sm transition duration-300 hover:border-violet-500/25 hover:bg-white/[0.05]"
+              className="rounded-[24px] border border-white/[0.07] bg-[#111116] p-6 shadow-[0_18px_60px_rgba(0,0,0,0.18)] backdrop-blur-sm transition duration-300 hover:border-violet-500/25 hover:bg-[#15151c]"
             >
               <div className="flex items-start gap-4">
                 <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-violet-400/15 bg-violet-500/10 text-violet-300">
@@ -358,7 +358,7 @@ export default function PortalDashboardPage() {
       </section>
 
       <section className="mt-6">
-        <article className="overflow-hidden rounded-[24px] border border-white/[0.07] bg-white/[0.035] shadow-[0_18px_60px_rgba(0,0,0,0.18)] backdrop-blur-sm">
+        <article className="overflow-hidden rounded-[24px] border border-white/[0.07] bg-[#111116] shadow-[0_18px_60px_rgba(0,0,0,0.18)] backdrop-blur-sm">
           <div className="flex items-center justify-between border-b border-white/[0.06] px-6 py-5">
             <h2 className="text-lg font-black text-white">
               Minhas Licenças
