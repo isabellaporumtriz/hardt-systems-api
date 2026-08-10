@@ -99,6 +99,43 @@ def get_or_create_charge(
     if existing is not None:
         return existing
 
+    payment_link_id = payment.get(
+        "paymentLink"
+    )
+
+    if payment_link_id:
+        link_charge = db.scalar(
+            select(Charge).where(
+                Charge.external_reference
+                == str(payment_link_id)
+            )
+        )
+
+        if link_charge is not None:
+            link_charge.asaas_payment_id = str(
+                payment_id
+            )
+            link_charge.payment_method = payment.get(
+                "billingType"
+            )
+            link_charge.due_at = parse_due_at(
+                payment
+            )
+
+            invoice_url = payment.get(
+                "invoiceUrl"
+            )
+
+            if invoice_url:
+                link_charge.invoice_url = str(
+                    invoice_url
+                )
+
+            db.add(link_charge)
+            db.flush()
+
+            return link_charge
+
     asaas_subscription_id = payment.get(
         "subscription"
     )

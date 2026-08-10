@@ -38,7 +38,6 @@ export async function createMonthlyCheckout(
 
 export interface OneTimeCheckoutPayload {
   product_slug: string;
-  cpf_cnpj: string;
   mobile_phone: string;
 }
 

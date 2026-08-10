@@ -536,10 +536,6 @@ async def create_one_time_checkout(
     user: User,
     payload: OneTimeCheckoutRequest,
 ) -> OneTimeCheckoutResponse:
-    cpf_cnpj = validate_document(
-        payload.cpf_cnpj
-    )
-
     mobile_phone = validate_mobile_phone(
         payload.mobile_phone
     )
@@ -573,31 +569,25 @@ async def create_one_time_checkout(
             ),
         )
 
-    customer_id = await ensure_asaas_customer(
-        db,
-        user,
-        cpf_cnpj=cpf_cnpj,
-        mobile_phone=mobile_phone,
+    description = (
+        f"Licença {product.name} "
+        f"por {product.license_duration_days or 30} dias"
     )
 
     try:
-        payment = await asaas_client.post(
-            "/payments",
+        payment_link = await asaas_client.post(
+            "/paymentLinks",
             json={
-                "customer": customer_id,
-                "billingType": "UNDEFINED",
+                "name": product.name,
+                "description": description,
                 "value": float(
                     Decimal(product.price)
                 ),
-                "dueDate": (
-                    utc_now()
-                    .date()
-                    .isoformat()
-                ),
-                "description": (
-                    f"Licença {product.name} "
-                    f"por {product.license_duration_days or 30} dias"
-                ),
+                "billingType": "UNDEFINED",
+                "chargeType": "DETACHED",
+                "dueDateLimitDays": 1,
+                "notificationEnabled": False,
+                "isAddressRequired": False,
                 "externalReference": (
                     f"{user.id}:{product.id}"
                 ),
@@ -619,21 +609,21 @@ async def create_one_time_checkout(
             detail={
                 "message": (
                     "Não foi possível criar "
-                    "a cobrança no Asaas."
+                    "o link de pagamento no Asaas."
                 ),
                 "asaas": exc.response_data,
             },
         ) from exc
 
-    payment_id = payment.get("id")
-    invoice_url = payment.get("invoiceUrl")
+    payment_link_id = payment_link.get("id")
+    payment_link_url = payment_link.get("url")
 
-    if not payment_id or not invoice_url:
+    if not payment_link_id or not payment_link_url:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=(
-                "O Asaas não retornou a cobrança "
-                "ou o link de pagamento."
+                "O Asaas não retornou o link "
+                "de pagamento."
             ),
         )
 
@@ -644,34 +634,31 @@ async def create_one_time_checkout(
         charge_number=(
             generate_charge_number(db)
         ),
-        description=(
-            f"Licença {product.name} "
-            f"por {product.license_duration_days or 30} dias"
-        ),
+        description=description,
         amount=Decimal(product.price),
         status="pending",
-        payment_method=payment.get(
-            "billingType"
-        ),
-        due_at=parse_due_date(
-            payment.get("dueDate")
-        ),
+        payment_method=None,
+        due_at=utc_now(),
         paid_at=None,
         cancelled_at=None,
         refunded_at=None,
+
+        # Guardamos o ID do Payment Link aqui.
+        # Quando o webhook PAYMENT_* chegar,
+        # payment.paymentLink terá este mesmo ID.
         external_reference=str(
-            payment_id
+            payment_link_id
         ),
+
         notes=(
-            "Cobrança avulsa criada "
-            "pela integração Asaas."
+            "Compra avulsa criada por "
+            "Payment Link Asaas. "
+            f"Celular informado: {mobile_phone}"
         ),
-        asaas_payment_id=str(
-            payment_id
-        ),
+        asaas_payment_id=None,
         asaas_subscription_id=None,
         invoice_url=str(
-            invoice_url
+            payment_link_url
         ),
     )
 
@@ -693,11 +680,9 @@ async def create_one_time_checkout(
         product_slug=product.slug,
         amount=Decimal(product.price),
         status=charge.status,
-        invoice_url=str(invoice_url),
-        asaas_customer_id=customer_id,
-        asaas_payment_id=str(
-            payment_id
-        ),
+        invoice_url=str(payment_link_url),
+        asaas_customer_id=None,
+        asaas_payment_id=None,
     )
 
 

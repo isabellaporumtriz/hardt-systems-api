@@ -34,9 +34,6 @@ export default function RegisterPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
 
-  const [cpfCnpj, setCpfCnpj] =
-    useState("");
-
   const [mobilePhone, setMobilePhone] =
     useState("");
 
@@ -89,25 +86,12 @@ export default function RegisterPage() {
     const normalizedEmail =
       email.trim().toLowerCase();
 
-    const normalizedDocument =
-      onlyDigits(cpfCnpj);
-
     const normalizedPhone =
       onlyDigits(mobilePhone);
 
     if (normalizedName.length < 2) {
       setError(
         "Informe um nome com pelo menos 2 caracteres.",
-      );
-      return;
-    }
-
-    if (
-      normalizedDocument.length !== 11
-      && normalizedDocument.length !== 14
-    ) {
-      setError(
-        "Informe um CPF ou CNPJ válido.",
       );
       return;
     }
@@ -174,9 +158,6 @@ export default function RegisterPage() {
         await createOneTimeCheckout({
           product_slug:
             HARDT_MEET_PRODUCT_SLUG,
-
-          cpf_cnpj:
-            normalizedDocument,
 
           mobile_phone:
             normalizedPhone,
@@ -357,30 +338,6 @@ export default function RegisterPage() {
                 )
               }
               placeholder="seu@email.com"
-              className="mt-2 h-12 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-violet-500"
-            />
-          </div>
-
-          <div className="mt-5">
-            <label
-              htmlFor="cpfCnpj"
-              className="text-sm font-medium text-zinc-300"
-            >
-              CPF ou CNPJ
-            </label>
-
-            <input
-              id="cpfCnpj"
-              type="text"
-              required
-              inputMode="numeric"
-              value={cpfCnpj}
-              onChange={(event) =>
-                setCpfCnpj(
-                  event.target.value,
-                )
-              }
-              placeholder="CPF ou CNPJ"
               className="mt-2 h-12 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-violet-500"
             />
           </div>

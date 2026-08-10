@@ -79,11 +79,6 @@ class OneTimeCheckoutRequest(BaseModel):
         max_length=120,
     )
 
-    cpf_cnpj: str = Field(
-        min_length=11,
-        max_length=18,
-    )
-
     mobile_phone: str = Field(
         min_length=10,
         max_length=20,
@@ -103,8 +98,8 @@ class OneTimeCheckoutResponse(BaseModel):
 
     invoice_url: str
 
-    asaas_customer_id: str
-    asaas_payment_id: str
+    asaas_customer_id: str | None
+    asaas_payment_id: str | None
 
 
 # ============================================================
