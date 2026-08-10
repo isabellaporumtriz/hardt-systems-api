@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  BookOpen,
   Download,
   Gauge,
   KeyRound,
@@ -36,6 +37,11 @@ const navigationItems = [
     icon: Download,
   },
   {
+    title: "Manuais",
+    href: "/portal/manuals",
+    icon: BookOpen,
+  },
+  {
     title: "Dispositivos",
     href: "/portal/devices",
     icon: Monitor,
@@ -68,9 +74,7 @@ export function PortalSidebar() {
   }
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-40 hidden w-[280px] flex-col overflow-hidden border-r border-white/[0.07] bg-[#0b0712] text-white shadow-[24px_0_80px_rgba(0,0,0,0.35)] lg:flex">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_12%,rgba(139,92,246,0.22),transparent_28%),radial-gradient(circle_at_50%_85%,rgba(99,102,241,0.12),transparent_32%)]" />
-
+    <aside className="fixed inset-y-0 left-0 z-40 hidden w-[280px] overflow-hidden border-r border-white/[0.06] bg-[#0b0712] lg:block">
       <div className="absolute -bottom-24 left-[-120px] h-72 w-[460px] rotate-[-10deg] rounded-[100%] border border-violet-400/10 bg-violet-500/[0.06] blur-2xl" />
 
       <div className="relative flex h-full flex-col">
