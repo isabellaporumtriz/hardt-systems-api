@@ -6,6 +6,11 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 
+# ============================================================
+# LEGADO — assinatura mensal
+# Mantido temporariamente para não quebrar rotas existentes.
+# ============================================================
+
 class MonthlyCheckoutRequest(BaseModel):
     product_slug: str = Field(
         min_length=2,
@@ -43,7 +48,6 @@ class MonthlyCheckoutResponse(BaseModel):
 
 class AdminMonthlyCheckoutRequest(BaseModel):
     user_id: UUID
-
     product_id: UUID
 
     cpf_cnpj: str = Field(
@@ -63,3 +67,64 @@ class AdminMonthlyCheckoutResponse(
     user_id: UUID
     user_name: str
     user_email: str
+
+
+# ============================================================
+# NOVO — compra avulsa / renovação de licença
+# ============================================================
+
+class OneTimeCheckoutRequest(BaseModel):
+    product_slug: str = Field(
+        min_length=2,
+        max_length=120,
+    )
+
+    cpf_cnpj: str = Field(
+        min_length=11,
+        max_length=18,
+    )
+
+    mobile_phone: str = Field(
+        min_length=10,
+        max_length=20,
+    )
+
+
+class OneTimeCheckoutResponse(BaseModel):
+    charge_id: UUID
+    charge_number: str
+
+    product_id: UUID
+    product_name: str
+    product_slug: str
+
+    amount: Decimal
+    status: str
+
+    invoice_url: str
+
+    asaas_customer_id: str
+    asaas_payment_id: str
+
+
+# ============================================================
+# RENOVAÇÃO — cobrança avulsa vinculada a licença existente
+# ============================================================
+
+class LicenseRenewalResponse(BaseModel):
+    charge_id: UUID
+    charge_number: str
+
+    license_id: UUID
+    license_number: str
+
+    product_id: UUID
+    product_name: str
+
+    amount: Decimal
+    status: str
+
+    invoice_url: str
+
+    asaas_customer_id: str
+    asaas_payment_id: str

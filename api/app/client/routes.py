@@ -6,6 +6,8 @@ from sqlalchemy.orm import Session
 from app.auth.dependencies import (
     get_current_client,
 )
+from app.billing.schemas import LicenseRenewalResponse
+from app.billing.services import create_license_renewal_checkout
 from app.client import services
 from app.client.schemas import (
     ClientChargeListResponse,
@@ -299,6 +301,25 @@ def update_client_password(
         payload,
     )
 
+
+
+@router.post(
+    "/licenses/{license_id}/renew",
+    response_model=LicenseRenewalResponse,
+    status_code=201,
+)
+async def renew_client_license(
+    license_id: UUID,
+    current_user: User = Depends(
+        get_current_client,
+    ),
+    db: Session = Depends(get_db),
+) -> LicenseRenewalResponse:
+    return await create_license_renewal_checkout(
+        db,
+        current_user,
+        license_id,
+    )
 
 
 @router.get(

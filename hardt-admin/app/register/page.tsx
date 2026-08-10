@@ -16,12 +16,12 @@ import {
 
 import { useAuth } from "@/components/providers/auth-provider";
 import { login } from "@/lib/api/auth";
-import { createMonthlyCheckout } from "@/lib/api/billing";
+import { createOneTimeCheckout } from "@/lib/api/billing";
 import { registerUser } from "@/lib/api/registration";
 import { saveAccessToken } from "@/lib/auth";
 
 const HARDT_MEET_PRODUCT_SLUG =
-  "google-meet-robot";
+  "hardt-meet";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -171,7 +171,7 @@ export default function RegisterPage() {
       );
 
       const checkout =
-        await createMonthlyCheckout({
+        await createOneTimeCheckout({
           product_slug:
             HARDT_MEET_PRODUCT_SLUG,
 

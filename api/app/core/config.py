@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     asaas_api_key: str = ""
     asaas_webhook_token: str = ""
 
+    frontend_url: str = "http://localhost:3000"
+
     r2_account_id: str = ""
     r2_access_key_id: str = ""
     r2_secret_access_key: str = ""

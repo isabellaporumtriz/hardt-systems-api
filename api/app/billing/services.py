@@ -25,10 +25,14 @@ from app.asaas.client import (
 )
 from app.billing.models import BillingSubscription
 from app.billing.schemas import (
+    LicenseRenewalResponse,
     MonthlyCheckoutRequest,
     MonthlyCheckoutResponse,
+    OneTimeCheckoutRequest,
+    OneTimeCheckoutResponse,
 )
 from app.finance.models import Charge
+from app.core.config import settings
 from app.finance.services import generate_charge_number
 from app.products.models import Product
 from app.users.models import User
@@ -524,6 +528,403 @@ async def create_monthly_checkout(
         asaas_payment_id=str(
             payment_id
         ),
+    )
+
+
+async def create_one_time_checkout(
+    db: Session,
+    user: User,
+    payload: OneTimeCheckoutRequest,
+) -> OneTimeCheckoutResponse:
+    cpf_cnpj = validate_document(
+        payload.cpf_cnpj
+    )
+
+    mobile_phone = validate_mobile_phone(
+        payload.mobile_phone
+    )
+
+    normalized_slug = (
+        payload.product_slug
+        .strip()
+        .lower()
+    )
+
+    product = db.scalar(
+        select(Product).where(
+            Product.slug == normalized_slug,
+            Product.is_active.is_(True),
+        )
+    )
+
+    if product is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Produto não encontrado.",
+        )
+
+    if Decimal(product.price) <= 0:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_422_UNPROCESSABLE_ENTITY
+            ),
+            detail=(
+                "O produto não possui um preço válido."
+            ),
+        )
+
+    customer_id = await ensure_asaas_customer(
+        db,
+        user,
+        cpf_cnpj=cpf_cnpj,
+        mobile_phone=mobile_phone,
+    )
+
+    try:
+        payment = await asaas_client.post(
+            "/payments",
+            json={
+                "customer": customer_id,
+                "billingType": "UNDEFINED",
+                "value": float(
+                    Decimal(product.price)
+                ),
+                "dueDate": (
+                    utc_now()
+                    .date()
+                    .isoformat()
+                ),
+                "description": (
+                    f"Licença {product.name} "
+                    f"por {product.license_duration_days or 30} dias"
+                ),
+                "externalReference": (
+                    f"{user.id}:{product.id}"
+                ),
+                "callback": {
+                    "successUrl": (
+                        f"{settings.frontend_url.rstrip('/')}/login"
+                    ),
+                    "autoRedirect": True,
+                },
+            },
+        )
+
+    except AsaasError as exc:
+        raise HTTPException(
+            status_code=(
+                exc.status_code
+                or status.HTTP_502_BAD_GATEWAY
+            ),
+            detail={
+                "message": (
+                    "Não foi possível criar "
+                    "a cobrança no Asaas."
+                ),
+                "asaas": exc.response_data,
+            },
+        ) from exc
+
+    payment_id = payment.get("id")
+    invoice_url = payment.get("invoiceUrl")
+
+    if not payment_id or not invoice_url:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=(
+                "O Asaas não retornou a cobrança "
+                "ou o link de pagamento."
+            ),
+        )
+
+    charge = Charge(
+        user_id=user.id,
+        product_id=product.id,
+        license_id=None,
+        charge_number=(
+            generate_charge_number(db)
+        ),
+        description=(
+            f"Licença {product.name} "
+            f"por {product.license_duration_days or 30} dias"
+        ),
+        amount=Decimal(product.price),
+        status="pending",
+        payment_method=payment.get(
+            "billingType"
+        ),
+        due_at=parse_due_date(
+            payment.get("dueDate")
+        ),
+        paid_at=None,
+        cancelled_at=None,
+        refunded_at=None,
+        external_reference=str(
+            payment_id
+        ),
+        notes=(
+            "Cobrança avulsa criada "
+            "pela integração Asaas."
+        ),
+        asaas_payment_id=str(
+            payment_id
+        ),
+        asaas_subscription_id=None,
+        invoice_url=str(
+            invoice_url
+        ),
+    )
+
+    db.add(charge)
+
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+    db.refresh(charge)
+
+    return OneTimeCheckoutResponse(
+        charge_id=charge.id,
+        charge_number=charge.charge_number,
+        product_id=product.id,
+        product_name=product.name,
+        product_slug=product.slug,
+        amount=Decimal(product.price),
+        status=charge.status,
+        invoice_url=str(invoice_url),
+        asaas_customer_id=customer_id,
+        asaas_payment_id=str(
+            payment_id
+        ),
+    )
+
+
+async def create_license_renewal_checkout(
+    db: Session,
+    user: User,
+    license_id,
+) -> LicenseRenewalResponse:
+    license_record = db.scalar(
+        select(License).where(
+            License.id == license_id,
+            License.user_id == user.id,
+        )
+    )
+
+    if license_record is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Licença não encontrada.",
+        )
+
+    if license_record.status == "revoked":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Uma licença revogada não pode "
+                "ser renovada."
+            ),
+        )
+
+    product = db.get(
+        Product,
+        license_record.product_id,
+    )
+
+    if product is None or not product.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Produto não encontrado ou inativo.",
+        )
+
+    if Decimal(product.price) <= 0:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_422_UNPROCESSABLE_ENTITY
+            ),
+            detail=(
+                "O produto não possui um preço válido."
+            ),
+        )
+
+    if not user.asaas_customer_id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Seu cadastro de pagamento ainda "
+                "não está disponível para renovação."
+            ),
+        )
+
+    # Evita gerar múltiplas cobranças pendentes
+    # para a mesma licença.
+    existing_charge = db.scalar(
+        select(Charge)
+        .where(
+            Charge.user_id == user.id,
+            Charge.license_id == license_record.id,
+            Charge.status == "pending",
+        )
+        .order_by(
+            Charge.created_at.desc()
+        )
+    )
+
+    if (
+        existing_charge is not None
+        and existing_charge.invoice_url
+    ):
+        return LicenseRenewalResponse(
+            charge_id=existing_charge.id,
+            charge_number=(
+                existing_charge.charge_number
+            ),
+            license_id=license_record.id,
+            license_number=(
+                license_record.license_number
+            ),
+            product_id=product.id,
+            product_name=product.name,
+            amount=existing_charge.amount,
+            status=existing_charge.status,
+            invoice_url=existing_charge.invoice_url,
+            asaas_customer_id=(
+                user.asaas_customer_id
+            ),
+            asaas_payment_id=(
+                existing_charge.asaas_payment_id
+                or ""
+            ),
+        )
+
+    customer_id = user.asaas_customer_id
+
+    try:
+        payment = await asaas_client.post(
+            "/payments",
+            json={
+                "customer": customer_id,
+                "billingType": "UNDEFINED",
+                "value": float(
+                    Decimal(product.price)
+                ),
+                "dueDate": (
+                    utc_now()
+                    .date()
+                    .isoformat()
+                ),
+                "description": (
+                    f"Renovação {product.name} "
+                    f"por "
+                    f"{product.license_duration_days or 30} "
+                    f"dias"
+                ),
+                "externalReference": (
+                    f"renew:{license_record.id}"
+                ),
+                "callback": {
+                    "successUrl": (
+                        f"{settings.frontend_url.rstrip('/')}/login"
+                    ),
+                    "autoRedirect": True,
+                },
+            },
+        )
+
+    except AsaasError as exc:
+        raise HTTPException(
+            status_code=(
+                exc.status_code
+                or status.HTTP_502_BAD_GATEWAY
+            ),
+            detail={
+                "message": (
+                    "Não foi possível criar "
+                    "a cobrança de renovação."
+                ),
+                "asaas": exc.response_data,
+            },
+        ) from exc
+
+    payment_id = payment.get("id")
+    invoice_url = payment.get("invoiceUrl")
+
+    if not payment_id or not invoice_url:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=(
+                "O Asaas não retornou a cobrança "
+                "ou o link de pagamento."
+            ),
+        )
+
+    charge = Charge(
+        user_id=user.id,
+        product_id=product.id,
+
+        # Aqui está a diferença fundamental:
+        # a cobrança já nasce vinculada à licença.
+        license_id=license_record.id,
+
+        charge_number=(
+            generate_charge_number(db)
+        ),
+        description=(
+            f"Renovação {product.name} "
+            f"por {product.license_duration_days or 30} "
+            f"dias"
+        ),
+        amount=Decimal(product.price),
+        status="pending",
+        payment_method=payment.get(
+            "billingType"
+        ),
+        due_at=parse_due_date(
+            payment.get("dueDate")
+        ),
+        paid_at=None,
+        cancelled_at=None,
+        refunded_at=None,
+        external_reference=str(
+            payment_id
+        ),
+        notes=(
+            "Cobrança avulsa de renovação "
+            "criada pela integração Asaas."
+        ),
+        asaas_payment_id=str(
+            payment_id
+        ),
+        asaas_subscription_id=None,
+        invoice_url=str(
+            invoice_url
+        ),
+    )
+
+    db.add(charge)
+
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+    db.refresh(charge)
+
+    return LicenseRenewalResponse(
+        charge_id=charge.id,
+        charge_number=charge.charge_number,
+        license_id=license_record.id,
+        license_number=license_record.license_number,
+        product_id=product.id,
+        product_name=product.name,
+        amount=Decimal(product.price),
+        status=charge.status,
+        invoice_url=str(invoice_url),
+        asaas_customer_id=str(customer_id),
+        asaas_payment_id=str(payment_id),
     )
 
 

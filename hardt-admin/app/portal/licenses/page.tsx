@@ -9,11 +9,14 @@ import {
   Copy,
   KeyRound,
   LoaderCircle,
+  RefreshCw,
   Search,
   ShieldOff,
   XCircle,
 } from "lucide-react";
+
 import Link from "next/link";
+
 import {
   useCallback,
   useEffect,
@@ -23,6 +26,7 @@ import {
 import {
   getClientLicenseKey,
   getClientLicenses,
+  renewClientLicense,
 } from "@/lib/api/client-licenses";
 
 import type {
@@ -67,8 +71,15 @@ function formatDate(value: string | null): string {
   }
 
   return new Intl.DateTimeFormat("pt-BR").format(
-    new Date(value)
+    new Date(value),
   );
+}
+
+function formatCurrency(value: string): string {
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(Number(value));
 }
 
 function getInitials(name: string): string {
@@ -82,7 +93,7 @@ function getInitials(name: string): string {
 }
 
 function statusLabel(
-  status: ClientLicenseStatus
+  status: ClientLicenseStatus,
 ): string {
   const labels: Record<
     ClientLicenseStatus,
@@ -100,22 +111,22 @@ function statusLabel(
 }
 
 function statusClass(
-  status: ClientLicenseStatus
+  status: ClientLicenseStatus,
 ): string {
   const classes: Record<
     ClientLicenseStatus,
     string
   > = {
     active:
-      "bg-emerald-100 text-emerald-700",
+      "border border-emerald-400/20 bg-emerald-400/10 text-emerald-300",
     pending_activation:
-      "bg-amber-100 text-amber-700",
+      "border border-amber-400/20 bg-amber-400/10 text-amber-300",
     expired:
-      "bg-slate-100 text-slate-600",
+      "border border-white/10 bg-white/[0.05] text-white/50",
     suspended:
-      "bg-orange-100 text-orange-700",
+      "border border-orange-400/20 bg-orange-400/10 text-orange-300",
     revoked:
-      "bg-red-100 text-red-700",
+      "border border-red-400/20 bg-red-400/10 text-red-300",
   };
 
   return classes[status];
@@ -131,18 +142,18 @@ function SummaryCard({
   icon: typeof KeyRound;
 }) {
   return (
-    <article className="rounded-[22px] border border-[#ebeaf2] bg-white p-5 shadow-[0_16px_50px_rgba(41,28,90,0.06)]">
+    <article className="rounded-[22px] border border-white/[0.07] bg-white/[0.035] p-5 shadow-[0_16px_50px_rgba(0,0,0,0.18)] backdrop-blur-sm">
       <div className="flex items-center gap-4">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-violet-100 text-violet-700">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full border border-violet-400/15 bg-violet-500/10 text-violet-300">
           <Icon size={22} />
         </div>
 
         <div>
-          <p className="text-sm font-medium text-[#777386]">
+          <p className="text-sm font-medium text-white/45">
             {title}
           </p>
 
-          <p className="mt-1 text-2xl font-black text-[#211942]">
+          <p className="mt-1 text-2xl font-black text-white">
             {value}
           </p>
         </div>
@@ -171,15 +182,22 @@ function LicenseRow({
   const [keyError, setKeyError] =
     useState("");
 
+  const [renewing, setRenewing] =
+    useState(false);
+
+  const [renewError, setRenewError] =
+    useState("");
+
   const devicePercentage =
     license.max_devices > 0
       ? Math.min(
           100,
           Math.round(
-            (license.active_devices /
-              license.max_devices) *
-              100
-          )
+            (
+              license.active_devices
+              / license.max_devices
+            ) * 100,
+          ),
         )
       : 0;
 
@@ -196,7 +214,7 @@ function LicenseRow({
     try {
       const response =
         await getClientLicenseKey(
-          license.id
+          license.id,
         );
 
       setFullKey(response.license_key);
@@ -204,7 +222,7 @@ function LicenseRow({
       return response.license_key;
     } catch {
       setKeyError(
-        "Não foi possível consultar a chave."
+        "Não foi possível consultar a chave.",
       );
 
       return null;
@@ -236,7 +254,7 @@ function LicenseRow({
     }
 
     await navigator.clipboard.writeText(
-      licenseKey
+      licenseKey,
     );
 
     setCopied(true);
@@ -246,44 +264,80 @@ function LicenseRow({
     }, 1500);
   }
 
+  async function handleRenew() {
+    if (license.status === "revoked") {
+      setRenewError(
+        "Licenças revogadas não podem ser renovadas.",
+      );
+      return;
+    }
+
+    setRenewing(true);
+    setRenewError("");
+
+    try {
+      const response =
+        await renewClientLicense(
+          license.id,
+        );
+
+      const checkoutWindow = window.open(
+        response.invoice_url,
+        "_blank",
+        "noopener,noreferrer",
+      );
+
+      if (!checkoutWindow) {
+        window.location.href =
+          response.invoice_url;
+      }
+    } catch {
+      setRenewError(
+        "Não foi possível gerar a renovação agora.",
+      );
+    } finally {
+      setRenewing(false);
+    }
+  }
+
   return (
-    <div className="border-b border-[#f0eff5] px-6 py-5 last:border-b-0">
+    <div className="border-b border-white/[0.06] px-6 py-5 last:border-b-0">
       <div className="grid gap-5 xl:grid-cols-[auto_1.35fr_1.25fr_0.8fr_0.8fr_auto] xl:items-center">
         <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-br from-[#7c3aed] to-[#251260] text-lg font-black text-white shadow-[0_12px_28px_rgba(76,29,149,0.22)]">
           {getInitials(
-            license.product_name
+            license.product_name,
           )}
         </div>
 
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="font-bold text-[#211942]">
+            <h3 className="font-bold text-white">
               {license.product_name}
             </h3>
 
             <span
               className={`rounded-full px-3 py-1 text-xs font-semibold ${statusClass(
-                license.status
+                license.status,
               )}`}
             >
               {statusLabel(
-                license.status
+                license.status,
               )}
             </span>
           </div>
 
-          <p className="mt-2 text-sm text-[#696477]">
+          <p className="mt-2 text-sm text-white/45">
             {license.license_number}
           </p>
 
-          <p className="mt-1 text-xs text-[#8a8595]">
+          <p className="mt-1 text-xs text-white/30">
             Versão{" "}
             {license.product_version}
           </p>
         </div>
 
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-[#918c9d]">
+          <p className="text-xs font-semibold uppercase tracking-wide text-white/30">
             Chave
           </p>
 
@@ -291,7 +345,7 @@ function LicenseRow({
             type="button"
             onClick={copyLicenseKey}
             disabled={loadingKey}
-            className="mt-2 flex max-w-full items-center gap-2 text-left text-sm font-semibold text-[#31294d] disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-2 flex max-w-full items-center gap-2 text-left text-sm font-semibold text-white/75 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <span className="break-all">
               {showKey && fullKey
@@ -301,11 +355,11 @@ function LicenseRow({
 
             <Copy
               size={14}
-              className="shrink-0"
+              className="shrink-0 text-white/40"
             />
 
             {copied && (
-              <span className="shrink-0 text-xs text-emerald-600">
+              <span className="shrink-0 text-xs text-emerald-400">
                 Copiado
               </span>
             )}
@@ -316,7 +370,7 @@ function LicenseRow({
               type="button"
               onClick={toggleKey}
               disabled={loadingKey}
-              className="rounded-lg bg-violet-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-lg bg-violet-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loadingKey
                 ? "Carregando..."
@@ -327,32 +381,32 @@ function LicenseRow({
 
             <Link
               href="/portal/downloads"
-              className="rounded-lg border border-violet-300 px-3 py-2 text-xs font-bold text-violet-700 transition hover:bg-violet-50"
+              className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-bold text-white/70 transition hover:border-violet-500/30 hover:bg-violet-500/10 hover:text-white"
             >
               Baixar robô
             </Link>
           </div>
 
           {keyError && (
-            <p className="mt-2 text-xs font-medium text-red-600">
+            <p className="mt-2 text-xs font-medium text-red-400">
               {keyError}
             </p>
           )}
         </div>
 
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-[#918c9d]">
+          <p className="text-xs font-semibold uppercase tracking-wide text-white/30">
             Dispositivos
           </p>
 
-          <p className="mt-2 font-bold text-[#211942]">
+          <p className="mt-2 font-bold text-white">
             {license.active_devices} /{" "}
             {license.max_devices}
           </p>
 
-          <div className="mt-2 h-1.5 w-full max-w-28 overflow-hidden rounded-full bg-[#ecebf2]">
+          <div className="mt-2 h-1.5 w-full max-w-28 overflow-hidden rounded-full bg-white/[0.08]">
             <div
-              className="h-full rounded-full bg-violet-600"
+              className="h-full rounded-full bg-violet-500"
               style={{
                 width: `${devicePercentage}%`,
               }}
@@ -361,24 +415,49 @@ function LicenseRow({
         </div>
 
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-[#918c9d]">
+          <p className="text-xs font-semibold uppercase tracking-wide text-white/30">
             Vencimento
           </p>
 
-          <p className="mt-2 text-sm font-semibold text-[#31294d]">
+          <p className="mt-2 text-sm font-semibold text-white/75">
             {formatDate(
-              license.expires_at
+              license.expires_at,
             )}
           </p>
         </div>
 
-        <Link
-          href={`/portal/licenses/${license.id}`}
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-violet-200 px-4 py-2.5 text-sm font-bold text-violet-700 transition hover:bg-violet-50"
-        >
-          Detalhes
-          <ArrowRight size={15} />
-        </Link>
+        <div className="flex min-w-[150px] flex-col items-stretch gap-2">
+          <button
+            type="button"
+            onClick={handleRenew}
+            disabled={
+              renewing
+              || license.status === "revoked"
+            }
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] px-4 py-2.5 text-sm font-bold text-white shadow-[0_12px_28px_rgba(124,58,237,0.22)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {renewing ? (
+              <>
+                <LoaderCircle
+                  size={15}
+                  className="animate-spin"
+                />
+                Gerando...
+              </>
+            ) : (
+              <>
+                <RefreshCw size={15} />
+                Renovar
+              </>
+            )}
+          </button>
+
+          {renewError && (
+            <p className="max-w-[170px] text-xs font-medium leading-5 text-red-400">
+              {renewError}
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -387,7 +466,7 @@ function LicenseRow({
 export default function PortalLicensesPage() {
   const [data, setData] =
     useState<ClientLicenseListResponse | null>(
-      null
+      null,
     );
 
   const [page, setPage] =
@@ -401,7 +480,7 @@ export default function PortalLicensesPage() {
 
   const [status, setStatus] =
     useState<ClientLicenseStatus | "">(
-      ""
+      "",
     );
 
   const [isLoading, setIsLoading] =
@@ -427,7 +506,7 @@ export default function PortalLicensesPage() {
         setData(response);
       } catch {
         setError(
-          "Não foi possível carregar suas licenças."
+          "Não foi possível carregar suas licenças.",
         );
       } finally {
         setIsLoading(false);
@@ -439,7 +518,7 @@ export default function PortalLicensesPage() {
   }, [loadLicenses]);
 
   function handleSearch(
-    event: React.FormEvent<HTMLFormElement>
+    event: React.FormEvent<HTMLFormElement>,
   ) {
     event.preventDefault();
     setPage(1);
@@ -447,14 +526,14 @@ export default function PortalLicensesPage() {
   }
 
   function handleStatusChange(
-    value: string
+    value: string,
   ) {
     setPage(1);
 
     setStatus(
       value as
         | ClientLicenseStatus
-        | ""
+        | "",
     );
   }
 
@@ -470,18 +549,17 @@ export default function PortalLicensesPage() {
   return (
     <div className="mx-auto w-full max-w-[1500px]">
       <section>
-        <p className="text-sm font-semibold text-violet-600">
+        <p className="text-sm font-semibold text-violet-400">
           HARDT OS
         </p>
 
-        <h1 className="mt-2 text-3xl font-black tracking-tight text-[#18122f] sm:text-4xl">
+        <h1 className="mt-2 text-3xl font-black tracking-tight text-white sm:text-4xl">
           Minhas Licenças
         </h1>
 
-        <p className="mt-2 text-sm leading-6 text-[#777386] sm:text-base">
-          Consulte seus produtos,
-          ativações, dispositivos e
-          vencimentos.
+        <p className="mt-2 text-sm leading-6 text-white/45 sm:text-base">
+          Consulte seus produtos, ativações,
+          dispositivos e vencimentos.
         </p>
       </section>
 
@@ -515,14 +593,14 @@ export default function PortalLicensesPage() {
         <SummaryCard
           title="Bloqueadas"
           value={
-            summary.suspended +
-            summary.revoked
+            summary.suspended
+            + summary.revoked
           }
           icon={ShieldOff}
         />
       </section>
 
-      <section className="mt-6 rounded-[24px] border border-[#ebeaf2] bg-white p-5 shadow-[0_18px_60px_rgba(41,28,90,0.07)]">
+      <section className="mt-6 rounded-[24px] border border-white/[0.07] bg-white/[0.035] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.18)] backdrop-blur-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <form
             onSubmit={handleSearch}
@@ -531,18 +609,18 @@ export default function PortalLicensesPage() {
             <div className="relative flex-1">
               <Search
                 size={18}
-                className="absolute left-4 top-1/2 -translate-y-1/2 text-[#918c9d]"
+                className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30"
               />
 
               <input
                 value={searchInput}
                 onChange={(event) =>
                   setSearchInput(
-                    event.target.value
+                    event.target.value,
                   )
                 }
                 placeholder="Buscar por produto, licença ou chave"
-                className="h-12 w-full rounded-xl border border-[#e6e3ee] bg-[#fbfaff] pl-11 pr-4 text-sm text-[#211942] outline-none transition focus:border-violet-400 focus:ring-4 focus:ring-violet-100"
+                className="h-12 w-full rounded-xl border border-white/[0.08] bg-white/[0.035] pl-11 pr-4 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-violet-500/50 focus:ring-4 focus:ring-violet-500/10"
               />
             </div>
 
@@ -558,36 +636,36 @@ export default function PortalLicensesPage() {
             value={status}
             onChange={(event) =>
               handleStatusChange(
-                event.target.value
+                event.target.value,
               )
             }
-            className="h-12 rounded-xl border border-[#e6e3ee] bg-white px-4 text-sm font-semibold text-[#31294d] outline-none focus:border-violet-400"
+            className="h-12 rounded-xl border border-white/[0.08] bg-[#111116] px-4 text-sm font-semibold text-white/70 outline-none focus:border-violet-500/50"
           >
             {statusOptions.map(
               (option) => (
                 <option
                   key={
-                    option.value ||
-                    "all"
+                    option.value
+                    || "all"
                   }
                   value={option.value}
                 >
                   {option.label}
                 </option>
-              )
+              ),
             )}
           </select>
         </div>
       </section>
 
-      <section className="mt-6 overflow-hidden rounded-[24px] border border-[#ebeaf2] bg-white shadow-[0_18px_60px_rgba(41,28,90,0.07)]">
-        <div className="flex items-center justify-between border-b border-[#f0eff5] px-6 py-5">
+      <section className="mt-6 overflow-hidden rounded-[24px] border border-white/[0.07] bg-white/[0.035] shadow-[0_18px_60px_rgba(0,0,0,0.18)] backdrop-blur-sm">
+        <div className="flex items-center justify-between border-b border-white/[0.06] px-6 py-5">
           <div>
-            <h2 className="text-lg font-black text-[#20183d]">
+            <h2 className="text-lg font-black text-white">
               Licenças adquiridas
             </h2>
 
-            <p className="mt-1 text-sm text-[#777386]">
+            <p className="mt-1 text-sm text-white/40">
               {data?.total ?? 0} resultado(s)
               encontrado(s)
             </p>
@@ -602,7 +680,7 @@ export default function PortalLicensesPage() {
                 setStatus("");
                 setPage(1);
               }}
-              className="text-sm font-semibold text-violet-700"
+              className="text-sm font-semibold text-violet-400 transition hover:text-violet-300"
             >
               Limpar filtros
             </button>
@@ -611,7 +689,7 @@ export default function PortalLicensesPage() {
 
         {isLoading ? (
           <div className="flex min-h-80 items-center justify-center">
-            <LoaderCircle className="animate-spin text-violet-600" />
+            <LoaderCircle className="animate-spin text-violet-500" />
           </div>
         ) : error ? (
           <div className="flex min-h-80 items-center justify-center px-6 text-center">
@@ -621,14 +699,14 @@ export default function PortalLicensesPage() {
                 className="mx-auto text-red-400"
               />
 
-              <p className="mt-4 font-bold text-red-700">
+              <p className="mt-4 font-bold text-red-300">
                 {error}
               </p>
 
               <button
                 type="button"
                 onClick={loadLicenses}
-                className="mt-4 text-sm font-semibold text-violet-700"
+                className="mt-4 text-sm font-semibold text-violet-400"
               >
                 Tentar novamente
               </button>
@@ -643,7 +721,7 @@ export default function PortalLicensesPage() {
                   key={license.id}
                   license={license}
                 />
-              )
+              ),
             )}
           </div>
         ) : (
@@ -651,14 +729,14 @@ export default function PortalLicensesPage() {
             <div>
               <KeyRound
                 size={42}
-                className="mx-auto text-violet-300"
+                className="mx-auto text-violet-400/45"
               />
 
-              <h3 className="mt-4 text-lg font-black text-[#211942]">
+              <h3 className="mt-4 text-lg font-black text-white">
                 Nenhuma licença encontrada
               </h3>
 
-              <p className="mt-2 max-w-md text-sm leading-6 text-[#777386]">
+              <p className="mt-2 max-w-md text-sm leading-6 text-white/40">
                 {search || status
                   ? "Não encontramos licenças com os filtros selecionados."
                   : "Quando uma licença for vinculada à sua conta, ela aparecerá aqui."}
@@ -668,8 +746,8 @@ export default function PortalLicensesPage() {
         )}
 
         {data && data.pages > 1 && (
-          <div className="flex items-center justify-between border-t border-[#f0eff5] px-6 py-5">
-            <p className="text-sm text-[#777386]">
+          <div className="flex items-center justify-between border-t border-white/[0.06] px-6 py-5">
+            <p className="text-sm text-white/40">
               Página {data.page} de{" "}
               {data.pages}
             </p>
@@ -682,11 +760,11 @@ export default function PortalLicensesPage() {
                   setPage((current) =>
                     Math.max(
                       1,
-                      current - 1
-                    )
+                      current - 1,
+                    ),
                   )
                 }
-                className="flex h-10 items-center gap-2 rounded-xl border border-[#e6e3ee] px-4 text-sm font-semibold text-[#31294d] disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex h-10 items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.035] px-4 text-sm font-semibold text-white/65 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <ArrowLeft size={15} />
                 Anterior
@@ -701,8 +779,8 @@ export default function PortalLicensesPage() {
                   setPage((current) =>
                     Math.min(
                       data.pages,
-                      current + 1
-                    )
+                      current + 1,
+                    ),
                   )
                 }
                 className="flex h-10 items-center gap-2 rounded-xl bg-violet-700 px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
