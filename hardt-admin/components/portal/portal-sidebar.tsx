@@ -8,6 +8,8 @@ import {
   LogOut,
   Monitor,
   RefreshCcw,
+  ShoppingBag,
+  ReceiptText,
   UserRound,
   WalletCards,
 } from "lucide-react";
@@ -51,6 +53,16 @@ const navigationItems = [
     title: "Carteira",
     href: "/portal/wallet",
     icon: WalletCards,
+  },
+  {
+    title: "Loja",
+    href: "/portal/store",
+    icon: ShoppingBag,
+  },
+  {
+    title: "Minhas Compras",
+    href: "/portal/purchases",
+    icon: ReceiptText,
   },
   {
     title: "Perfil",
