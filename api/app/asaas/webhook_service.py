@@ -19,6 +19,7 @@ from app.finance.models import Charge
 from app.finance.services import generate_charge_number
 from app.licenses.schemas import LicenseCreateRequest
 from app.licenses.services.issuer import LicenseIssuer
+from app.wallet.topup_service import process_wallet_topup_payment
 
 
 PAID_EVENTS = {
@@ -336,6 +337,15 @@ def process_payment_event(
     event_type: str,
     payment: dict[str, Any],
 ) -> dict[str, Any]:
+    wallet_result = process_wallet_topup_payment(
+        db,
+        event_type=event_type,
+        payment=payment,
+    )
+
+    if wallet_result is not None:
+        return wallet_result
+
     charge = get_or_create_charge(
         db,
         payment,

@@ -6,6 +6,8 @@ from app.auth.dependencies import get_current_user
 from app.core.database import get_db
 from app.users.models import User
 from app.wallet.models import WalletTransaction
+from app.wallet.schemas import WalletTopupCreateRequest, WalletTopupResponse
+from app.wallet.topup_service import create_pix_topup
 from app.wallet.schemas import (
     WalletResponse,
     WalletTransactionResponse,
@@ -89,3 +91,48 @@ def list_wallet_transactions(
         )
         for tx in transactions
     ]
+
+
+@router.post(
+    "/topups",
+    response_model=WalletTopupResponse,
+)
+async def create_wallet_topup(
+    payload: WalletTopupCreateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> WalletTopupResponse:
+    wallet = get_wallet(
+        db,
+        current_user.id,
+    )
+
+    if wallet is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Carteira não encontrada.",
+        )
+
+    topup = await create_pix_topup(
+        db,
+        user=current_user,
+        wallet=wallet,
+        amount=payload.amount,
+    )
+
+    return WalletTopupResponse(
+        id=topup.id,
+        amount_brl=topup.amount_brl,
+        status=topup.status,
+        provider=topup.provider,
+        provider_payment_id=(
+            topup.provider_payment_id
+        ),
+        external_reference=(
+            topup.external_reference
+        ),
+        pix_copy_paste=topup.pix_copy_paste,
+        pix_qr_code=topup.pix_qr_code,
+        paid_at=topup.paid_at,
+        created_at=topup.created_at,
+    )

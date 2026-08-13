@@ -97,6 +97,17 @@ def credit(
         user_id,
     )
 
+    existing_transaction = db.scalar(
+        select(WalletTransaction).where(
+            WalletTransaction.wallet_id == wallet.id,
+            WalletTransaction.type == "credit",
+            WalletTransaction.reference == reference,
+        )
+    )
+
+    if existing_transaction is not None:
+        return wallet
+
     wallet.balance += amount
 
     transaction = WalletTransaction(
@@ -159,3 +170,29 @@ def debit(
     db.flush()
 
     return wallet
+
+
+def get_topup_by_id(
+    db: Session,
+    topup_id: UUID,
+) -> "WalletTopup | None":
+    from app.wallet.models import WalletTopup
+
+    return db.get(
+        WalletTopup,
+        topup_id,
+    )
+
+
+def get_topup_by_payment_id(
+    db: Session,
+    payment_id: str,
+) -> "WalletTopup | None":
+    from app.wallet.models import WalletTopup
+
+    return db.scalar(
+        select(WalletTopup).where(
+            WalletTopup.provider_payment_id
+            == payment_id,
+        )
+    )
