@@ -132,6 +132,7 @@ def purchase_product(
     *,
     user_id: UUID,
     product_id: UUID,
+    idempotency_key: str,
 ) -> Purchase:
     """
     Compra uma unidade disponível.
@@ -141,6 +142,26 @@ def purchase_product(
     Nenhum commit deve ocorrer dentro das funções
     chamadas por ela.
     """
+
+    clean_idempotency_key = (
+        str(idempotency_key or "").strip()
+    )
+
+    if not clean_idempotency_key:
+        raise InventoryError(
+            "Chave de idempotência obrigatória."
+        )
+
+    existing_purchase = db.scalar(
+        select(Purchase).where(
+            Purchase.user_id == user_id,
+            Purchase.idempotency_key
+            == clean_idempotency_key,
+        )
+    )
+
+    if existing_purchase is not None:
+        return existing_purchase
 
     try:
         product = db.scalar(
@@ -213,6 +234,7 @@ def purchase_product(
             user_id=user_id,
             product_id=product.id,
             inventory_item_id=item.id,
+            idempotency_key=clean_idempotency_key,
             amount_brl=amount,
             status="completed",
             completed_at=now,

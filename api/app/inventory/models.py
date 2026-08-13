@@ -82,6 +82,13 @@ class Purchase(BaseModel):
         index=True,
     )
 
+    idempotency_key: Mapped[str] = mapped_column(
+        String(120),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+
     amount_brl: Mapped[Decimal] = mapped_column(
         Numeric(
             precision=14,

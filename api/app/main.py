@@ -13,6 +13,7 @@ from app.products.routes import router as products_router
 from app.users.routes import router as users_router
 from app.client.routes import router as client_router
 from app.wallet.routes import router as wallet_router
+from app.inventory.routes import router as store_router
 
 
 app = FastAPI(
@@ -109,3 +110,7 @@ app.include_router(
     prefix="/api/v1",
 )
 
+app.include_router(
+    store_router,
+    prefix="/api/v1",
+)
