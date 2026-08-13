@@ -44,6 +44,7 @@ app.add_middleware(
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "https://hardt-admin.vercel.app",
+        "https://portal.hardtsystems.com",
     ],
     allow_credentials=True,
     allow_methods=["*"],
