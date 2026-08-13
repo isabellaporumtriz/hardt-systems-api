@@ -22,6 +22,8 @@ class WalletTransactionResponse(BaseModel):
 
 class WalletTopupCreateRequest(BaseModel):
     amount: Decimal
+    cpf_cnpj: str | None = None
+    mobile_phone: str | None = None
 
 
 class WalletTopupResponse(BaseModel):

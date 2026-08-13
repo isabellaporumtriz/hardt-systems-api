@@ -11,6 +11,7 @@ from app.asaas.client import (
     AsaasError,
     asaas_client,
 )
+from app.billing.services import ensure_asaas_customer
 from app.users.models import User
 from app.wallet.models import (
     Wallet,
@@ -28,6 +29,8 @@ async def create_pix_topup(
     user: User,
     wallet: Wallet,
     amount: Decimal,
+    cpf_cnpj: str | None = None,
+    mobile_phone: str | None = None,
 ) -> WalletTopup:
     amount = Decimal(amount).quantize(
         Decimal("0.01")
@@ -52,12 +55,40 @@ async def create_pix_topup(
         )
 
     if not user.asaas_customer_id:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                "Seu cadastro de pagamento ainda não "
-                "está configurado."
-            ),
+        clean_cpf_cnpj = (
+            str(cpf_cnpj or "")
+            .replace(".", "")
+            .replace("-", "")
+            .replace("/", "")
+            .strip()
+        )
+
+        clean_mobile_phone = (
+            str(mobile_phone or "")
+            .replace("(", "")
+            .replace(")", "")
+            .replace("-", "")
+            .replace(" ", "")
+            .strip()
+        )
+
+        if not clean_cpf_cnpj or not clean_mobile_phone:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "code": "PAYMENT_PROFILE_REQUIRED",
+                    "message": (
+                        "CPF/CNPJ e celular são necessários "
+                        "na primeira recarga."
+                    ),
+                },
+            )
+
+        await ensure_asaas_customer(
+            db,
+            user,
+            cpf_cnpj=clean_cpf_cnpj,
+            mobile_phone=clean_mobile_phone,
         )
 
     external_reference = (

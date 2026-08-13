@@ -118,6 +118,8 @@ async def create_wallet_topup(
         user=current_user,
         wallet=wallet,
         amount=payload.amount,
+        cpf_cnpj=payload.cpf_cnpj,
+        mobile_phone=payload.mobile_phone,
     )
 
     return WalletTopupResponse(
