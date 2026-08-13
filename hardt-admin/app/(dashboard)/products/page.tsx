@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import axios from "axios";
 import {
   LoaderCircle,
@@ -8,6 +10,7 @@ import {
   Plus,
   Search,
   X,
+  Boxes,
 } from "lucide-react";
 import {
   FormEvent,
@@ -440,16 +443,26 @@ export default function ProductsPage() {
                     </td>
 
                     <td className="px-6 py-5 text-right">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          openEditModal(product)
-                        }
-                        className="inline-flex h-10 items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-4 text-sm font-medium text-zinc-300 transition hover:border-violet-500/40 hover:text-white"
-                      >
-                        <Pencil size={15} />
-                        Editar
-                      </button>
+                      <div className="flex items-center justify-end gap-2">
+                        <Link
+                          href={`/products/${product.id}/inventory`}
+                          className="inline-flex h-10 items-center gap-2 rounded-xl border border-violet-500/20 bg-violet-500/10 px-4 text-sm font-medium text-violet-300 transition hover:border-violet-500/40 hover:bg-violet-500/15 hover:text-white"
+                        >
+                          <Boxes size={15} />
+                          Estoque
+                        </Link>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            openEditModal(product)
+                          }
+                          className="inline-flex h-10 items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-4 text-sm font-medium text-zinc-300 transition hover:border-violet-500/40 hover:text-white"
+                        >
+                          <Pencil size={15} />
+                          Editar
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
