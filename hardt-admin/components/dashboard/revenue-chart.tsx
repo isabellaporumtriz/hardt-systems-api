@@ -9,17 +9,46 @@ import {
   XAxis,
 } from "recharts";
 
-const data = [
-  { month: "Jan", revenue: 1200 },
-  { month: "Fev", revenue: 1800 },
-  { month: "Mar", revenue: 2400 },
-  { month: "Abr", revenue: 3100 },
-  { month: "Mai", revenue: 4200 },
-  { month: "Jun", revenue: 5200 },
-  { month: "Jul", revenue: 6100 },
-];
+import type { MonthlyRevenueItem } from "@/lib/api/finance";
 
-export function RevenueChart() {
+type RevenueChartProps = {
+  items: MonthlyRevenueItem[];
+  totalRevenue: string;
+};
+
+function formatCurrency(
+  value: number | string,
+) {
+  const numericValue = Number(value);
+
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(
+    Number.isFinite(numericValue)
+      ? numericValue
+      : 0,
+  );
+}
+
+export function RevenueChart({
+  items,
+  totalRevenue,
+}: RevenueChartProps) {
+  const data = items
+    .slice(-7)
+    .map((item) => ({
+      month: item.label || item.month,
+      revenue: Number(item.revenue) || 0,
+      payments: item.payments || 0,
+    }));
+
+  const paymentCount = data.reduce(
+    (total, item) =>
+      total + item.payments,
+    0,
+  );
+
   return (
     <section className="rounded-3xl border border-zinc-800 bg-gradient-to-br from-zinc-900 to-zinc-950 p-6">
       <div className="mb-8 flex items-center justify-between">
@@ -29,11 +58,13 @@ export function RevenueChart() {
           </p>
 
           <h2 className="mt-2 text-3xl font-bold text-white">
-            R$ 6.100
+            {formatCurrency(totalRevenue)}
           </h2>
 
-          <p className="mt-2 text-sm text-emerald-400">
-            ▲ +18,4% em relação ao mês passado
+          <p className="mt-2 text-sm text-zinc-500">
+            {paymentCount > 0
+              ? `${paymentCount} pagamento(s) nos últimos meses`
+              : "Sem pagamentos registrados"}
           </p>
         </div>
 
@@ -85,6 +116,14 @@ export function RevenueChart() {
             />
 
             <Tooltip
+              formatter={(value) => [
+                formatCurrency(
+                  typeof value === "number"
+                    ? value
+                    : Number(value),
+                ),
+                "Receita",
+              ]}
               contentStyle={{
                 background: "#18181b",
                 border: "1px solid #27272a",

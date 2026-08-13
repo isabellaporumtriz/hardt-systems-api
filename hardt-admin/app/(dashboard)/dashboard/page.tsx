@@ -9,10 +9,18 @@ import {
   getLicenses,
 } from "@/lib/api/admin";
 
+import {
+  getFinancialDashboard,
+} from "@/lib/api/finance";
+
 import type {
   AdminLicense,
   DashboardData,
 } from "@/lib/types/api";
+
+import type {
+  FinancialDashboard,
+} from "@/lib/api/finance";
 
 export default function DashboardPage() {
   const [dashboard, setDashboard] =
@@ -21,19 +29,27 @@ export default function DashboardPage() {
   const [licenses, setLicenses] =
     useState<AdminLicense[]>([]);
 
+  const [financial, setFinancial] =
+    useState<FinancialDashboard | null>(null);
+
   const [error, setError] = useState("");
 
   useEffect(() => {
     async function loadDashboard() {
       try {
-        const [dashboardData, licensesData] =
-          await Promise.all([
-            getDashboard(),
-            getLicenses(),
-          ]);
+        const [
+          dashboardData,
+          licensesData,
+          financialData,
+        ] = await Promise.all([
+          getDashboard(),
+          getLicenses(),
+          getFinancialDashboard(10),
+        ]);
 
         setDashboard(dashboardData);
         setLicenses(licensesData);
+        setFinancial(financialData);
       } catch {
         setError(
           "Não foi possível carregar o dashboard."
@@ -54,7 +70,7 @@ export default function DashboardPage() {
     );
   }
 
-  if (!dashboard) {
+  if (!dashboard || !financial) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <LoaderCircle className="animate-spin text-violet-500" />
@@ -66,6 +82,7 @@ export default function DashboardPage() {
     <DashboardContent
       dashboard={dashboard}
       licenses={licenses}
+      financial={financial}
     />
   );
 }

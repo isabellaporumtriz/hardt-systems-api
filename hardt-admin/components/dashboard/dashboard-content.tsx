@@ -14,6 +14,8 @@ import { ActivityFeed } from "./activity-feed";
 import { LicenseStatus } from "./license-status";
 import { RecentLicenses } from "./recent-licenses";
 
+import type { FinancialDashboard } from "@/lib/api/finance";
+
 import type {
   DashboardData,
   AdminLicense,
@@ -22,11 +24,13 @@ import type {
 type DashboardContentProps = {
   dashboard: DashboardData;
   licenses: AdminLicense[];
+  financial: FinancialDashboard;
 };
 
 export function DashboardContent({
   dashboard,
   licenses,
+  financial,
 }: DashboardContentProps) {
   return (
     <div className="space-y-8">
@@ -38,8 +42,19 @@ export function DashboardContent({
 
         <StatsCard
           title="Receita"
-          value="R$ 0,00"
-          description="Sem pagamentos registrados"
+          value={new Intl.NumberFormat("pt-BR", {
+            style: "currency",
+            currency: "BRL",
+          }).format(
+            Number(
+              financial.summary.total_revenue,
+            ) || 0,
+          )}
+          description={
+            financial.summary.paid_charges > 0
+              ? `${financial.summary.paid_charges} pagamento(s) recebido(s)`
+              : "Sem pagamentos registrados"
+          }
           icon={CreditCard}
         />
 
@@ -78,7 +93,12 @@ export function DashboardContent({
       <section className="grid gap-6 xl:grid-cols-3">
 
         <div className="xl:col-span-2">
-          <RevenueChart />
+          <RevenueChart
+            items={financial.monthly_revenue}
+            totalRevenue={
+              financial.summary.total_revenue
+            }
+          />
         </div>
 
         <LicenseStatus
