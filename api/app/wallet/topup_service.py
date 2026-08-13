@@ -294,3 +294,116 @@ def process_wallet_topup_payment(
         "paid": True,
         "topup_id": str(topup.id),
     }
+
+
+async def reconcile_wallet_topup(
+    db: Session,
+    *,
+    topup: WalletTopup,
+    user: User,
+) -> WalletTopup:
+    """
+    Consulta o pagamento diretamente no Asaas e reconcilia
+    uma recarga da Wallet que ainda esteja pendente.
+
+    O crédito continua sendo processado pela mesma função
+    utilizada pelo webhook, preservando a idempotência.
+    """
+
+    if topup.user_id != user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Recarga não encontrada.",
+        )
+
+    if topup.status == "paid":
+        return topup
+
+    payment_id = str(
+        topup.provider_payment_id or ""
+    ).strip()
+
+    if not payment_id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "A recarga ainda não possui um pagamento "
+                "associado no provedor."
+            ),
+        )
+
+    try:
+        payment = await asaas_client.get(
+            f"/payments/{payment_id}"
+        )
+    except AsaasError as exc:
+        raise HTTPException(
+            status_code=(
+                exc.status_code
+                or status.HTTP_502_BAD_GATEWAY
+            ),
+            detail={
+                "message": (
+                    "Não foi possível consultar o pagamento "
+                    "no Asaas."
+                ),
+                "asaas": exc.response_data,
+            },
+        ) from exc
+
+    remote_payment_id = str(
+        payment.get("id") or ""
+    ).strip()
+
+    if remote_payment_id != payment_id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "O pagamento retornado pelo provedor não "
+                "corresponde à recarga."
+            ),
+        )
+
+    remote_external_reference = str(
+        payment.get("externalReference") or ""
+    ).strip()
+
+    if (
+        remote_external_reference
+        != topup.external_reference
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "A referência externa do pagamento não "
+                "corresponde à recarga."
+            ),
+        )
+
+    remote_status = str(
+        payment.get("status") or ""
+    ).strip().upper()
+
+    if remote_status in {
+        "RECEIVED",
+        "CONFIRMED",
+    }:
+        event_type = (
+            "PAYMENT_RECEIVED"
+            if remote_status == "RECEIVED"
+            else "PAYMENT_CONFIRMED"
+        )
+
+        process_wallet_topup_payment(
+            db,
+            event_type=event_type,
+            payment=payment,
+        )
+
+        db.refresh(topup)
+
+        return topup
+
+    # Pagamento ainda não liquidado.
+    # Não alteramos saldo nem forçamos estado local.
+    return topup
