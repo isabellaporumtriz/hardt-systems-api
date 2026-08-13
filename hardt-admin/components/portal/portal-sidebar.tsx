@@ -9,6 +9,7 @@ import {
   Monitor,
   RefreshCcw,
   UserRound,
+  WalletCards,
 } from "lucide-react";
 
 import Link from "next/link";
@@ -45,6 +46,11 @@ const navigationItems = [
     title: "Dispositivos",
     href: "/portal/devices",
     icon: Monitor,
+  },
+  {
+    title: "Carteira",
+    href: "/portal/wallet",
+    icon: WalletCards,
   },
   {
     title: "Perfil",
