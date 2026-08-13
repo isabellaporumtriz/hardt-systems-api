@@ -23,6 +23,7 @@ import {
   createWalletTopup,
   getWallet,
   getWalletTransactions,
+  reconcileWalletTopup,
 } from "@/lib/api/client-wallet";
 
 import type {
@@ -152,14 +153,24 @@ function TopupModal({
 
 
   async function checkPayment() {
+    if (!topup) {
+      return;
+    }
+
     setChecking(true);
 
     try {
-      const wallet = await getWallet();
+      const reconciledTopup =
+        await reconcileWalletTopup(topup.id);
 
-      if (Number(wallet.balance) > 0) {
+      if (reconciledTopup.status === "paid") {
         await onPaid();
       }
+    } catch (error) {
+      console.error(
+        "Erro ao reconciliar pagamento:",
+        error,
+      );
     } finally {
       setChecking(false);
     }

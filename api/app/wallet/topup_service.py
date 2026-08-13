@@ -248,10 +248,7 @@ def process_wallet_topup_payment(
             "ao WalletTopup registrado."
         )
 
-    if event_type not in {
-        "PAYMENT_CONFIRMED",
-        "PAYMENT_RECEIVED",
-    }:
+    if event_type != "PAYMENT_RECEIVED":
         return {
             "wallet_topup": True,
             "ignored": True,
@@ -384,19 +381,10 @@ async def reconcile_wallet_topup(
         payment.get("status") or ""
     ).strip().upper()
 
-    if remote_status in {
-        "RECEIVED",
-        "CONFIRMED",
-    }:
-        event_type = (
-            "PAYMENT_RECEIVED"
-            if remote_status == "RECEIVED"
-            else "PAYMENT_CONFIRMED"
-        )
-
+    if remote_status == "RECEIVED":
         process_wallet_topup_payment(
             db,
-            event_type=event_type,
+            event_type="PAYMENT_RECEIVED",
             payment=payment,
         )
 
