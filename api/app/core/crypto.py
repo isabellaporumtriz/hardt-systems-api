@@ -35,3 +35,33 @@ def decrypt_license_key(value: str) -> str:
         raise EncryptionError(
             "Não foi possível descriptografar a licença."
         ) from exc
+
+
+def encrypt_sensitive_value(value: str) -> str:
+    """
+    Criptografa conteúdo sensível preservando exatamente
+    caracteres, caixa e formatação recebidos.
+    """
+    if not isinstance(value, str):
+        raise EncryptionError(
+            "O valor sensível deve ser uma string."
+        )
+
+    return get_fernet().encrypt(
+        value.encode("utf-8")
+    ).decode("utf-8")
+
+
+def decrypt_sensitive_value(value: str) -> str:
+    """
+    Descriptografa conteúdo sensível genérico.
+    """
+    try:
+        return get_fernet().decrypt(
+            value.encode("utf-8")
+        ).decode("utf-8")
+    except InvalidToken as exc:
+        raise EncryptionError(
+            "Não foi possível descriptografar o conteúdo."
+        ) from exc
+

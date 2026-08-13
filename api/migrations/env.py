@@ -5,6 +5,8 @@ from sqlalchemy import engine_from_config, pool
 
 from app.core.config import settings
 from app.core.database import Base
+from app.inventory.models import InventoryItem, Purchase
+from app.asaas.webhook_models import AsaasWebhookEvent
 
 from app.billing.models import BillingSubscription
 from app.devices.models import Device
