@@ -7,15 +7,17 @@ from app.core.config import settings
 from app.core.database import Base
 
 from app.billing.models import BillingSubscription
-from app.finance.models import Charge
-from app.products.models import Product
-from app.users.models import User
 from app.devices.models import Device
 from app.downloads.models import DownloadRelease
 from app.finance.models import Charge
 from app.licenses.models import License
 from app.products.models import Product
 from app.users.models import User
+from app.wallet.models import (
+    Wallet,
+    WalletTopup,
+    WalletTransaction,
+)
 
 
 config = context.config

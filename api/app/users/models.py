@@ -6,6 +6,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import BaseModel
 
 if TYPE_CHECKING:
+    from app.wallet.models import Wallet
     from app.licenses.models import License
 
 
@@ -50,6 +51,14 @@ class User(BaseModel):
     )
 
     # Relationships
+
+    wallet: Mapped["Wallet | None"] = relationship(
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+        single_parent=True,
+    )
+
 
     licenses: Mapped[list["License"]] = relationship(
         back_populates="user",

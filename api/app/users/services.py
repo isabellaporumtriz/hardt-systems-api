@@ -5,6 +5,7 @@ from app.core.security import hash_password
 from app.users import repositories
 from app.users.models import User
 from app.users.schemas import UserCreate
+from app.wallet.services import create_wallet
 
 
 def register_user(db: Session, data: UserCreate) -> User:
@@ -18,9 +19,24 @@ def register_user(db: Session, data: UserCreate) -> User:
             detail="Já existe um usuário cadastrado com este e-mail.",
         )
 
-    return repositories.create_user(
-        db,
-        name=data.name.strip(),
-        email=email,
-        password_hash=hash_password(data.password),
-    )
+    try:
+        user = repositories.create_user(
+            db,
+            name=data.name.strip(),
+            email=email,
+            password_hash=hash_password(data.password),
+        )
+
+        create_wallet(
+            db,
+            user.id,
+        )
+
+        db.commit()
+        db.refresh(user)
+
+        return user
+
+    except Exception:
+        db.rollback()
+        raise
