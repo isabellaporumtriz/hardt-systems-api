@@ -7,6 +7,7 @@ from uuid import UUID
 from sqlalchemy import (
     DateTime,
     ForeignKey,
+    Integer,
     Numeric,
     String,
     Text,
@@ -71,6 +72,9 @@ class Purchase(BaseModel):
         index=True,
     )
 
+    # Campo legado.
+    # Continua apontando para o primeiro item da compra
+    # para preservar compatibilidade durante a migração.
     inventory_item_id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey(
@@ -89,6 +93,22 @@ class Purchase(BaseModel):
         index=True,
     )
 
+    quantity: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=1,
+        server_default="1",
+    )
+
+    unit_price_brl: Mapped[Decimal] = mapped_column(
+        Numeric(
+            precision=14,
+            scale=2,
+        ),
+        nullable=False,
+    )
+
+    # amount_brl passa a representar o TOTAL da compra.
     amount_brl: Mapped[Decimal] = mapped_column(
         Numeric(
             precision=14,
@@ -107,4 +127,28 @@ class Purchase(BaseModel):
     completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
+    )
+
+
+class PurchaseItem(BaseModel):
+    __tablename__ = "purchase_items"
+
+    purchase_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey(
+            "purchases.id",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+        index=True,
+    )
+
+    inventory_item_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey(
+            "inventory_items.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+        unique=True,
     )

@@ -100,7 +100,7 @@ export function PortalSidebar() {
           <PortalLogo />
         </div>
 
-        <nav className="flex-1 space-y-2 overflow-y-auto px-5">
+        <nav className="flex-1 space-y-1 overflow-y-auto px-5">
           {navigationItems.map((item) => {
             const active = isActiveRoute(
               pathname,
@@ -116,7 +116,7 @@ export function PortalSidebar() {
                 aria-current={
                   active ? "page" : undefined
                 }
-                className={`group flex items-center gap-4 rounded-2xl border px-4 py-3.5 transition-all duration-200 ${
+                className={`group flex items-center gap-4 rounded-2xl border px-4 py-3 transition-all duration-200 ${
                   active
                     ? "border-violet-400/20 bg-violet-500/15 text-white shadow-[0_16px_40px_rgba(76,29,149,0.18)]"
                     : "border-transparent text-white/55 hover:border-white/[0.07] hover:bg-white/[0.05] hover:text-white"

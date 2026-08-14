@@ -16,6 +16,7 @@ from app.core.crypto import (
 from app.inventory.models import (
     InventoryItem,
     Purchase,
+    PurchaseItem,
 )
 from app.products.models import Product
 from app.wallet.services import (
@@ -133,14 +134,13 @@ def purchase_product(
     user_id: UUID,
     product_id: UUID,
     idempotency_key: str,
+    quantity: int = 1,
 ) -> Purchase:
     """
-    Compra uma unidade disponível.
+    Compra uma ou várias unidades de forma atômica.
 
-    IMPORTANTE:
-    esta função controla toda a transação.
-    Nenhum commit deve ocorrer dentro das funções
-    chamadas por ela.
+    Ou toda a quantidade solicitada é entregue e debitada,
+    ou nenhuma unidade é consumida.
     """
 
     clean_idempotency_key = (
@@ -150,6 +150,23 @@ def purchase_product(
     if not clean_idempotency_key:
         raise InventoryError(
             "Chave de idempotência obrigatória."
+        )
+
+    try:
+        clean_quantity = int(quantity)
+    except (TypeError, ValueError) as exc:
+        raise InventoryError(
+            "Quantidade inválida."
+        ) from exc
+
+    if clean_quantity < 1:
+        raise InventoryError(
+            "Quantidade deve ser maior que zero."
+        )
+
+    if clean_quantity > 500:
+        raise InventoryError(
+            "Quantidade máxima por compra é 500."
         )
 
     existing_purchase = db.scalar(
@@ -182,30 +199,43 @@ def purchase_product(
                 "Produto indisponível para compra."
             )
 
-        item = db.scalar(
-            select(InventoryItem)
-            .where(
-                InventoryItem.product_id
-                == product.id,
-                InventoryItem.status
-                == "available",
-            )
-            .order_by(
-                InventoryItem.created_at.asc()
-            )
-            .with_for_update(
-                skip_locked=True
-            )
-            .limit(1)
+        items = list(
+            db.scalars(
+                select(InventoryItem)
+                .where(
+                    InventoryItem.product_id
+                    == product.id,
+                    InventoryItem.status
+                    == "available",
+                )
+                .order_by(
+                    InventoryItem.created_at.asc()
+                )
+                .with_for_update(
+                    skip_locked=True
+                )
+                .limit(clean_quantity)
+            ).all()
         )
 
-        if item is None:
+        if len(items) != clean_quantity:
             raise OutOfStockError(
-                "Produto sem estoque disponível."
+                (
+                    "Estoque insuficiente. "
+                    f"Solicitado={clean_quantity} | "
+                    f"Disponível={len(items)}"
+                )
             )
 
-        amount = Decimal(
+        unit_price = Decimal(
             product.price
+        ).quantize(
+            Decimal("0.01")
+        )
+
+        total_amount = (
+            unit_price
+            * Decimal(clean_quantity)
         ).quantize(
             Decimal("0.01")
         )
@@ -215,12 +245,13 @@ def purchase_product(
         debit(
             db,
             user_id=user_id,
-            amount=amount,
+            amount=total_amount,
             reference=(
                 f"purchase:{purchase_id}"
             ),
             description=(
-                f"Compra: {product.name}"
+                f"Compra: {product.name} "
+                f"x{clean_quantity}"
             ),
             product_code=product.slug,
         )
@@ -229,26 +260,37 @@ def purchase_product(
             timezone.utc
         )
 
+        first_item = items[0]
+
         purchase = Purchase(
             id=purchase_id,
             user_id=user_id,
             product_id=product.id,
-            inventory_item_id=item.id,
+            inventory_item_id=first_item.id,
             idempotency_key=clean_idempotency_key,
-            amount_brl=amount,
+            quantity=clean_quantity,
+            unit_price_brl=unit_price,
+            amount_brl=total_amount,
             status="completed",
             completed_at=now,
         )
 
-        item.status = "sold"
-        item.sold_at = now
-
-        db.add(item)
         db.add(purchase)
+
+        for item in items:
+            item.status = "sold"
+            item.sold_at = now
+
+            purchase_item = PurchaseItem(
+                purchase_id=purchase_id,
+                inventory_item_id=item.id,
+            )
+
+            db.add(item)
+            db.add(purchase_item)
 
         db.commit()
 
-        db.refresh(item)
         db.refresh(purchase)
 
         return purchase
@@ -256,7 +298,6 @@ def purchase_product(
     except Exception:
         db.rollback()
         raise
-
 
 def get_purchase(
     db: Session,
@@ -284,27 +325,76 @@ def get_purchase_delivery(
     *,
     purchase_id: UUID,
     user_id: UUID,
-) -> dict[str, Any]:
+) -> list[dict[str, Any]]:
     purchase = get_purchase(
         db,
         purchase_id=purchase_id,
         user_id=user_id,
     )
 
-    item = db.get(
-        InventoryItem,
-        purchase.inventory_item_id,
+    purchase_items = list(
+        db.scalars(
+            select(PurchaseItem)
+            .where(
+                PurchaseItem.purchase_id
+                == purchase.id,
+            )
+            .order_by(
+                PurchaseItem.created_at.asc(),
+                PurchaseItem.id.asc(),
+            )
+        ).all()
     )
 
-    if item is None:
-        raise InventoryError(
-            "Item da compra não encontrado."
+    # Compatibilidade com compras antigas,
+    # anteriores ao suporte a PurchaseItem.
+    if not purchase_items:
+        legacy_item = db.get(
+            InventoryItem,
+            purchase.inventory_item_id,
         )
 
-    return deserialize_delivery_payload(
-        item.delivery_payload
-    )
+        if legacy_item is None:
+            raise InventoryError(
+                "Item da compra não encontrado."
+            )
 
+        return [
+            {
+                "inventory_item_id": legacy_item.id,
+                "payload": (
+                    deserialize_delivery_payload(
+                        legacy_item.delivery_payload
+                    )
+                ),
+            }
+        ]
+
+    delivery_items: list[dict[str, Any]] = []
+
+    for purchase_item in purchase_items:
+        inventory_item = db.get(
+            InventoryItem,
+            purchase_item.inventory_item_id,
+        )
+
+        if inventory_item is None:
+            raise InventoryError(
+                "Item da compra não encontrado."
+            )
+
+        delivery_items.append(
+            {
+                "inventory_item_id": inventory_item.id,
+                "payload": (
+                    deserialize_delivery_payload(
+                        inventory_item.delivery_payload
+                    )
+                ),
+            }
+        )
+
+    return delivery_items
 
 def list_user_purchases(
     db: Session,

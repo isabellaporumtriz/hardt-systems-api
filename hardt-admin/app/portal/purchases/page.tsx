@@ -161,6 +161,11 @@ export default function PurchasesPage() {
                     </p>
 
                     <p className="mt-1 text-xs text-white/30">
+                      {purchase.quantity}{" "}
+                      {purchase.quantity === 1
+                        ? "unidade"
+                        : "unidades"}
+                      {" · "}
                       {formatDate(
                         purchase.created_at
                       )}

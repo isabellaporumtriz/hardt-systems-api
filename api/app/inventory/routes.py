@@ -1,3 +1,6 @@
+import csv
+import io
+
 from uuid import UUID
 
 from fastapi import (
@@ -11,6 +14,7 @@ from sqlalchemy import (
     select,
 )
 from sqlalchemy.orm import Session
+from fastapi.responses import StreamingResponse
 
 from app.auth.dependencies import (
     get_current_admin,
@@ -82,6 +86,8 @@ def serialize_purchase(
         inventory_item_id=(
             purchase.inventory_item_id
         ),
+        quantity=purchase.quantity,
+        unit_price_brl=purchase.unit_price_brl,
         amount_brl=purchase.amount_brl,
         status=purchase.status,
         completed_at=purchase.completed_at,
@@ -157,6 +163,7 @@ def create_purchase(
             user_id=current_user.id,
             product_id=payload.product_id,
             idempotency_key=payload.idempotency_key,
+            quantity=payload.quantity,
         )
 
         return serialize_purchase(
@@ -290,7 +297,8 @@ def read_purchase_delivery(
         purchase_id=purchase.id,
         product_id=product.id,
         product_name=product.name,
-        payload=delivery,
+        quantity=purchase.quantity,
+        items=delivery,
     )
 
 
@@ -411,4 +419,147 @@ def read_inventory_stock(
         available=available,
         sold=sold,
         total=total,
+    )
+
+
+@router.get(
+    "/purchases/{purchase_id}/delivery.csv",
+)
+def download_purchase_delivery_csv(
+    purchase_id: UUID,
+    current_user: User = Depends(
+        get_current_user
+    ),
+    db: Session = Depends(get_db),
+) -> StreamingResponse:
+    purchase = db.scalar(
+        select(Purchase).where(
+            Purchase.id == purchase_id,
+            Purchase.user_id
+            == current_user.id,
+        )
+    )
+
+    if purchase is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Compra não encontrada.",
+        )
+
+    product = db.get(
+        Product,
+        purchase.product_id,
+    )
+
+    if product is None:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Produto vinculado à compra "
+                "não foi encontrado."
+            ),
+        )
+
+    try:
+        delivery = get_purchase_delivery(
+            db,
+            purchase_id=purchase.id,
+            user_id=current_user.id,
+        )
+
+    except PurchaseNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        ) from exc
+
+    except InventoryError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Não foi possível carregar "
+                "os dados da compra."
+            ),
+        ) from exc
+
+    # União das chaves de todos os payloads.
+    fieldnames: list[str] = []
+
+    for delivery_item in delivery:
+        payload = delivery_item["payload"]
+
+        for key in payload.keys():
+            if key not in fieldnames:
+                fieldnames.append(key)
+
+    output = io.StringIO(
+        newline="",
+    )
+
+    writer = csv.DictWriter(
+        output,
+        fieldnames=fieldnames,
+        extrasaction="ignore",
+    )
+
+    writer.writeheader()
+
+    for delivery_item in delivery:
+        payload = delivery_item["payload"]
+
+        row = {}
+
+        for key in fieldnames:
+            value = payload.get(
+                key,
+                "",
+            )
+
+            if value is None:
+                value = ""
+
+            elif isinstance(
+                value,
+                (dict, list),
+            ):
+                import json
+
+                value = json.dumps(
+                    value,
+                    ensure_ascii=False,
+                )
+
+            else:
+                value = str(value)
+
+            row[key] = value
+
+        writer.writerow(row)
+
+    content = output.getvalue()
+
+    # BOM UTF-8 ajuda Excel no Windows a
+    # reconhecer acentuação corretamente.
+    csv_bytes = (
+        "\ufeff" + content
+    ).encode("utf-8")
+
+    filename = (
+        f"{product.slug}-"
+        f"{purchase.id}.csv"
+    )
+
+    return StreamingResponse(
+        iter([csv_bytes]),
+        media_type=(
+            "text/csv; charset=utf-8"
+        ),
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{filename}"'
+            ),
+            "Cache-Control": (
+                "private, no-store, max-age=0"
+            ),
+        },
     )

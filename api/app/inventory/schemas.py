@@ -20,6 +20,13 @@ class StoreProductResponse(BaseModel):
 
 class PurchaseCreateRequest(BaseModel):
     product_id: UUID
+
+    quantity: int = Field(
+        default=1,
+        ge=1,
+        le=500,
+    )
+
     idempotency_key: str = Field(
         min_length=8,
         max_length=120,
@@ -32,17 +39,27 @@ class PurchaseResponse(BaseModel):
     product_name: str
     product_slug: str
     inventory_item_id: UUID
+
+    quantity: int
+    unit_price_brl: Decimal
     amount_brl: Decimal
+
     status: str
     completed_at: datetime | None
     created_at: datetime
+
+
+class PurchaseDeliveryItemResponse(BaseModel):
+    inventory_item_id: UUID
+    payload: dict[str, Any]
 
 
 class PurchaseDeliveryResponse(BaseModel):
     purchase_id: UUID
     product_id: UUID
     product_name: str
-    payload: dict[str, Any]
+    quantity: int
+    items: list[PurchaseDeliveryItemResponse]
 
 
 class InventoryItemCreateRequest(BaseModel):

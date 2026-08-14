@@ -4,7 +4,9 @@ import {
   AlertCircle,
   CheckCircle2,
   LoaderCircle,
+  Minus,
   Package,
+  Plus,
   ShoppingBag,
   WalletCards,
 } from "lucide-react";
@@ -70,6 +72,9 @@ export default function StorePage() {
   const [success, setSuccess] =
     useState("");
 
+  const [quantities, setQuantities] =
+    useState<Record<string, number>>({});
+
   /*
    * A key permanece associada ao produto
    * enquanto a tentativa não for concluída.
@@ -116,6 +121,20 @@ export default function StorePage() {
   ) {
     setError("");
     setSuccess("");
+
+    const quantity =
+      quantities[product.id] ?? 1;
+
+    if (
+      quantity < 1
+      || quantity > product.available_stock
+    ) {
+      setError(
+        "Escolha uma quantidade válida."
+      );
+      return;
+    }
+
     setBuyingId(product.id);
 
     let key =
@@ -124,7 +143,8 @@ export default function StorePage() {
       ];
 
     if (!key) {
-      key = `portal-${crypto.randomUUID()}`;
+      key =
+        `portal-${product.id}-${quantity}-${crypto.randomUUID()}`;
 
       purchaseKeys.current[
         product.id
@@ -134,6 +154,7 @@ export default function StorePage() {
     try {
       await purchaseStoreProduct(
         product.id,
+        quantity,
         key
       );
 
@@ -145,7 +166,11 @@ export default function StorePage() {
       ];
 
       setSuccess(
-        `${product.name} comprado com sucesso.`
+        `${quantity} ${
+          quantity === 1 ? "unidade" : "unidades"
+        } de ${product.name} ${
+          quantity === 1 ? "comprada" : "compradas"
+        } com sucesso.`
       );
 
       await loadData();
@@ -272,8 +297,14 @@ export default function StorePage() {
               const price =
                 Number(product.price);
 
+              const quantity =
+                quantities[product.id] ?? 1;
+
+              const total =
+                price * quantity;
+
               const enoughBalance =
-                balance >= price;
+                balance >= total;
 
               const buying =
                 buyingId === product.id;
@@ -302,7 +333,7 @@ export default function StorePage() {
                     <div className="mt-7 flex items-end justify-between">
                       <div>
                         <p className="text-xs text-white/30">
-                          Preço
+                          Preço por unidade
                         </p>
 
                         <p className="mt-1 text-2xl font-black text-white">
@@ -331,6 +362,113 @@ export default function StorePage() {
                     </div>
 
 
+                    <div className="mt-7 rounded-2xl border border-white/[0.07] bg-black/10 p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-xs text-white/30">
+                            Quantidade
+                          </p>
+
+                          <div className="mt-2 flex items-center gap-2">
+                            <button
+                              type="button"
+                              aria-label="Diminuir quantidade"
+                              onClick={() =>
+                                setQuantities(
+                                  (current) => ({
+                                    ...current,
+                                    [product.id]:
+                                      Math.max(
+                                        1,
+                                        quantity - 1
+                                      ),
+                                  })
+                                )
+                              }
+                              disabled={
+                                buying
+                                || quantity <= 1
+                              }
+                              className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04] text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-30"
+                            >
+                              <Minus size={16} />
+                            </button>
+
+                            <input
+                              type="number"
+                              min={1}
+                              max={
+                                product.available_stock
+                              }
+                              value={quantity}
+                              disabled={buying}
+                              onChange={(event) => {
+                                const raw =
+                                  Number(
+                                    event.target.value
+                                  );
+
+                                const next =
+                                  Number.isFinite(raw)
+                                    ? Math.min(
+                                        product.available_stock,
+                                        Math.max(
+                                          1,
+                                          Math.floor(raw)
+                                        )
+                                      )
+                                    : 1;
+
+                                setQuantities(
+                                  (current) => ({
+                                    ...current,
+                                    [product.id]:
+                                      next,
+                                  })
+                                );
+                              }}
+                              className="h-10 w-20 rounded-xl border border-white/[0.08] bg-white/[0.04] px-2 text-center font-black text-white outline-none transition focus:border-violet-400/40"
+                            />
+
+                            <button
+                              type="button"
+                              aria-label="Aumentar quantidade"
+                              onClick={() =>
+                                setQuantities(
+                                  (current) => ({
+                                    ...current,
+                                    [product.id]:
+                                      Math.min(
+                                        product.available_stock,
+                                        quantity + 1
+                                      ),
+                                  })
+                                )
+                              }
+                              disabled={
+                                buying
+                                || quantity
+                                  >= product.available_stock
+                              }
+                              className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04] text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-30"
+                            >
+                              <Plus size={16} />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="text-right">
+                          <p className="text-xs text-white/30">
+                            Total
+                          </p>
+
+                          <p className="mt-2 text-xl font-black text-white">
+                            {formatMoney(total)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
                     <button
                       type="button"
                       onClick={() =>
@@ -357,7 +495,10 @@ export default function StorePage() {
                           <ShoppingBag
                             size={18}
                           />
-                          Comprar agora
+                          Comprar {quantity}{" "}
+                          {quantity === 1
+                            ? "unidade"
+                            : "unidades"}
                         </>
                       ) : (
                         "Saldo insuficiente"
