@@ -110,3 +110,13 @@ class LicenseValidationResponse(BaseModel):
     status: str
     expires_at: datetime
     last_validated_at: datetime
+
+class LicenseTrialResponse(BaseModel):
+    id: UUID
+    license_number: str
+    license_key: str
+    key_preview: str
+    status: str
+    trial_days: int
+    first_activated_at: datetime | None
+    expires_at: datetime | None

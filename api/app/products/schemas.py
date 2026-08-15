@@ -38,6 +38,11 @@ class ProductCreate(BaseModel):
 
     is_active: bool = True
 
+    delivery_type: str = Field(
+        default="inventory",
+        pattern=r"^(licensed|inventory)$",
+    )
+
 
 class ProductUpdate(BaseModel):
     name: str | None = Field(
@@ -72,6 +77,11 @@ class ProductUpdate(BaseModel):
 
     is_active: bool | None = None
 
+    delivery_type: str | None = Field(
+        default=None,
+        pattern=r"^(licensed|inventory)$",
+    )
+
 
 class ProductResponse(BaseModel):
     id: UUID
@@ -81,6 +91,7 @@ class ProductResponse(BaseModel):
     version: str
     price: Decimal
     is_active: bool
+    delivery_type: str
     created_at: datetime
     updated_at: datetime
 

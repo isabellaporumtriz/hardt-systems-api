@@ -28,6 +28,8 @@ class LicenseIssuer:
     def issue(
         self,
         data: LicenseCreateRequest,
+        *,
+        is_trial: bool = False,
     ) -> LicenseCreateResponse:
         for attempt in range(self.MAX_ATTEMPTS):
             sequence = self.generator.generate_sequence()
@@ -53,6 +55,8 @@ class LicenseIssuer:
                 first_activated_at=None,
                 expires_at=None,
                 is_active=True,
+                is_trial=is_trial,
+                trial_started_at=None,
             )
 
             try:

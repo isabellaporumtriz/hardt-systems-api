@@ -121,6 +121,14 @@ class LicenseActivator:
 
         if license_record.first_activated_at is None:
             license_record.first_activated_at = now
+
+            if (
+                license_record.is_trial
+                and license_record.trial_started_at
+                is None
+            ):
+                license_record.trial_started_at = now
+
             license_record.expires_at = now + timedelta(
                 days=license_record.duration_days
             )

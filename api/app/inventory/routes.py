@@ -112,18 +112,33 @@ def list_store_products(
                 InventoryItem.id
             ).label("available_stock"),
         )
-        .join(
+        .outerjoin(
             InventoryItem,
-            InventoryItem.product_id
-            == Product.id,
+            (
+                InventoryItem.product_id
+                == Product.id
+            )
+            & (
+                InventoryItem.status
+                == "available"
+            ),
         )
         .where(
             Product.is_active.is_(True),
-            InventoryItem.status
-            == "available",
         )
         .group_by(
             Product.id,
+        )
+        .having(
+            (
+                Product.delivery_type
+                == "licensed"
+            )
+            | (
+                func.count(
+                    InventoryItem.id
+                ) > 0
+            )
         )
         .order_by(
             Product.name.asc(),

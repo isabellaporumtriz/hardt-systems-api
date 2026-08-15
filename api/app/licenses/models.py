@@ -2,7 +2,16 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Uuid
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Uuid,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import BaseModel
@@ -15,6 +24,19 @@ if TYPE_CHECKING:
 
 class License(BaseModel):
     __tablename__ = "licenses"
+
+    __table_args__ = (
+        Index(
+            "uq_licenses_trial_user_product",
+            "user_id",
+            "product_id",
+            unique=True,
+            postgresql_where=text(
+                "is_trial = true "
+                "OR trial_started_at IS NOT NULL"
+            ),
+        ),
+    )
 
     user_id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True),
@@ -105,6 +127,22 @@ class License(BaseModel):
         Boolean,
         nullable=False,
         default=True,
+    )
+
+    # Trial promocional.
+    # Um usuário pode receber no máximo um trial
+    # por produto.
+    is_trial: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+        index=True,
+    )
+
+    trial_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
     )
 
     # Relationships

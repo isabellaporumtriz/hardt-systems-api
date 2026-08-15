@@ -56,6 +56,21 @@ class Product(BaseModel):
         index=True,
     )
 
+    # Define como o produto é entregue ao cliente.
+    #
+    # licensed:
+    #   software/produto baseado em licença.
+    #
+    # inventory:
+    #   produto unitário entregue a partir de estoque.
+    delivery_type: Mapped[str] = mapped_column(
+        String(30),
+        nullable=False,
+        default="inventory",
+        server_default="inventory",
+        index=True,
+    )
+
     license_duration_days: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,

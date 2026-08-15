@@ -16,12 +16,9 @@ import {
 
 import { useAuth } from "@/components/providers/auth-provider";
 import { login } from "@/lib/api/auth";
-import { createOneTimeCheckout } from "@/lib/api/billing";
+import { claimHardtMeetTrial } from "@/lib/api/client-licenses";
 import { registerUser } from "@/lib/api/registration";
 import { saveAccessToken } from "@/lib/auth";
-
-const HARDT_MEET_PRODUCT_SLUG =
-  "hardt-meet";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -151,30 +148,24 @@ export default function RegisterPage() {
       );
 
       setStatusMessage(
-        "Gerando sua cobrança...",
+        "Liberando seus 7 dias grátis...",
       );
 
-      const checkout =
-        await createOneTimeCheckout({
-          product_slug:
-            HARDT_MEET_PRODUCT_SLUG,
+      const trial =
+        await claimHardtMeetTrial();
 
-          mobile_phone:
-            normalizedPhone,
-        });
-
-      if (!checkout.invoice_url) {
+      if (!trial.id) {
         throw new Error(
-          "O checkout não retornou o link de pagamento.",
+          "Não foi possível liberar o período gratuito.",
         );
       }
 
       setStatusMessage(
-        "Tudo pronto. Abrindo pagamento...",
+        "Teste grátis liberado! Abrindo sua licença...",
       );
 
       window.location.assign(
-        checkout.invoice_url,
+        "/portal/licenses",
       );
     } catch (requestError) {
       console.error(
@@ -234,7 +225,7 @@ export default function RegisterPage() {
           );
         } else {
           setError(
-            "Não foi possível concluir o cadastro e pagamento.",
+            "Não foi possível concluir o cadastro e liberar seu teste grátis.",
           );
         }
       } else if (
@@ -245,7 +236,7 @@ export default function RegisterPage() {
         );
       } else {
         setError(
-          "Não foi possível concluir o cadastro e pagamento.",
+          "Não foi possível concluir o cadastro e liberar seu teste grátis.",
         );
       }
 
@@ -283,8 +274,8 @@ export default function RegisterPage() {
           </h1>
 
           <p className="mt-2 text-sm text-zinc-500">
-            Crie sua conta e continue
-            para o pagamento do Hardt Meet.
+            Crie sua conta e teste o Hardt Meet
+            grátis por 7 dias.
           </p>
         </div>
 

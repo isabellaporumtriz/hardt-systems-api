@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.dependencies import (
     get_current_admin,
+    get_current_user,
 )
 from app.core.database import get_db
 from app.licenses.repositories import (
@@ -27,6 +28,7 @@ from app.licenses.schemas import (
     LicenseStatusRequest,
     LicenseValidationRequest,
     LicenseValidationResponse,
+    LicenseTrialResponse,
 )
 from app.licenses.services.activation import (
     DeviceLimitError,
@@ -39,6 +41,13 @@ from app.licenses.services.issuer import (
     LicenseIssuanceError,
     LicenseIssuer,
 )
+from app.licenses.services.trial import (
+    HARDT_MEET_TRIAL_DAYS,
+    TrialAlreadyUsedError,
+    TrialProductUnavailableError,
+    issue_hardt_meet_trial,
+)
+
 from app.licenses.services.validator import (
     DeviceInactiveError,
     InvalidActivationTokenError,
@@ -390,4 +399,55 @@ def validate_license(
                 "Não foi possível validar "
                 "a licença."
             ),
+        ) from exc
+
+@router.post(
+    "/trial/hardt-meet",
+    response_model=LicenseTrialResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Iniciar teste grátis do Hardt Meet",
+)
+def claim_hardt_meet_trial(
+    current_user: object = Depends(
+        get_current_user
+    ),
+    db: Session = Depends(get_db),
+) -> LicenseTrialResponse:
+    try:
+        result = issue_hardt_meet_trial(
+            db,
+            user=current_user,
+        )
+
+        return LicenseTrialResponse(
+            id=result.id,
+            license_number=(
+                result.license_number
+            ),
+            license_key=result.license_key,
+            key_preview=result.key_preview,
+            status=result.status,
+            trial_days=(
+                HARDT_MEET_TRIAL_DAYS
+            ),
+            first_activated_at=(
+                result.first_activated_at
+            ),
+            expires_at=result.expires_at,
+        )
+
+    except TrialAlreadyUsedError as exc:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_409_CONFLICT
+            ),
+            detail=str(exc),
+        ) from exc
+
+    except TrialProductUnavailableError as exc:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_404_NOT_FOUND
+            ),
+            detail=str(exc),
         ) from exc

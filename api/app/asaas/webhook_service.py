@@ -227,15 +227,44 @@ def find_existing_license(
     )
 
     if (
-        previous_charge is None
-        or previous_charge.license_id is None
+        previous_charge is not None
+        and previous_charge.license_id is not None
     ):
-        return None
+        previous_license = db.get(
+            License,
+            previous_charge.license_id,
+        )
 
-    return db.get(
-        License,
-        previous_charge.license_id,
+        if previous_license is not None:
+            return previous_license
+
+    # Primeiro pagamento após um trial:
+    # ainda não existe cobrança anterior apontando
+    # para a licença. Procuramos explicitamente a
+    # licença que carrega o histórico de trial.
+    trial_license = db.scalar(
+        select(License)
+        .where(
+            License.user_id == charge.user_id,
+            License.product_id
+            == charge.product_id,
+            (
+                License.is_trial.is_(True)
+                | License.trial_started_at.is_not(
+                    None
+                )
+            ),
+            License.status != "revoked",
+        )
+        .order_by(
+            License.created_at.asc()
+        )
     )
+
+    if trial_license is not None:
+        return trial_license
+
+    return None
 
 
 def issue_or_renew_license(
@@ -322,6 +351,13 @@ def issue_or_renew_license(
             else "pending_activation"
         )
         existing_license.is_active = True
+
+    # Se a licença nasceu como trial,
+    # o pagamento a converte em licença comercial.
+    # trial_started_at permanece como histórico
+    # para impedir um novo trial futuro.
+    if existing_license.is_trial:
+        existing_license.is_trial = False
 
     charge.license_id = existing_license.id
 
