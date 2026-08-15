@@ -14,7 +14,10 @@ from app.products.models import Product
 from app.users.models import User
 
 
-HARDT_MEET_SLUG = "google-meet-robot"
+HARDT_MEET_SLUGS = (
+    "hardt-meet",
+    "google-meet-robot",
+)
 HARDT_MEET_TRIAL_DAYS = 7
 
 
@@ -38,9 +41,13 @@ def get_hardt_meet_product(
     db: Session,
 ) -> Product:
     product = db.scalar(
-        select(Product).where(
-            Product.slug == HARDT_MEET_SLUG,
+        select(Product)
+        .where(
+            Product.slug.in_(HARDT_MEET_SLUGS),
             Product.is_active.is_(True),
+        )
+        .order_by(
+            (Product.slug == "hardt-meet").desc()
         )
     )
 
