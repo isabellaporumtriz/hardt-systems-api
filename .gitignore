@@ -196,9 +196,12 @@ wheels/
 *.bak
 *.bak-*
 
-# Hardt Admin source library
+# Hardt Admin — permitir somente o client novo do SMM
 !hardt-admin/lib/
-!hardt-admin/lib/**
+hardt-admin/lib/*
+!hardt-admin/lib/api/
+hardt-admin/lib/api/*
+!hardt-admin/lib/api/client-smm.ts
 
 # Python caches re-included pelo downloads module
 api/app/downloads/__pycache__/
