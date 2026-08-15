@@ -1,0 +1,1 @@
+"""Hardt SMM integration layer."""

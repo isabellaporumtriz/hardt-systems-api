@@ -14,6 +14,7 @@ from app.downloads.models import DownloadRelease
 from app.finance.models import Charge
 from app.licenses.models import License
 from app.products.models import Product
+from app.smm.models import SMMOrder
 from app.users.models import User
 from app.wallet.models import (
     Wallet,

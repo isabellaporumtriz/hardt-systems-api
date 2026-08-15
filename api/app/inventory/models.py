@@ -75,13 +75,13 @@ class Purchase(BaseModel):
     # Campo legado.
     # Continua apontando para o primeiro item da compra
     # para preservar compatibilidade durante a migração.
-    inventory_item_id: Mapped[UUID] = mapped_column(
+    inventory_item_id: Mapped[UUID | None] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey(
             "inventory_items.id",
             ondelete="RESTRICT",
         ),
-        nullable=False,
+        nullable=True,
         unique=True,
         index=True,
     )

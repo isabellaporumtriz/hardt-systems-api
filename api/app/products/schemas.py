@@ -40,7 +40,7 @@ class ProductCreate(BaseModel):
 
     delivery_type: str = Field(
         default="inventory",
-        pattern=r"^(licensed|inventory)$",
+        pattern=r"^(licensed|inventory|service)$",
     )
 
 
@@ -79,7 +79,7 @@ class ProductUpdate(BaseModel):
 
     delivery_type: str | None = Field(
         default=None,
-        pattern=r"^(licensed|inventory)$",
+        pattern=r"^(licensed|inventory|service)$",
     )
 
 

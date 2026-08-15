@@ -191,3 +191,15 @@ wheels/
 # Backend downloads module
 !api/app/downloads/
 !api/app/downloads/**
+
+# Hardt temporary backups
+*.bak
+*.bak-*
+
+# Hardt Admin source library
+!hardt-admin/lib/
+!hardt-admin/lib/**
+
+# Python caches re-included pelo downloads module
+api/app/downloads/__pycache__/
+api/app/downloads/**/*.py[cod]

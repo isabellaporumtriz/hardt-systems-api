@@ -14,6 +14,7 @@ from app.users.routes import router as users_router
 from app.client.routes import router as client_router
 from app.wallet.routes import router as wallet_router
 from app.inventory.routes import router as store_router
+from app.smm.routes import router as smm_router
 
 
 app = FastAPI(
@@ -112,5 +113,11 @@ app.include_router(
 
 app.include_router(
     store_router,
+    prefix="/api/v1",
+)
+
+
+app.include_router(
+    smm_router,
     prefix="/api/v1",
 )

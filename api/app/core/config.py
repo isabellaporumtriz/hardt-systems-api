@@ -12,6 +12,15 @@ class Settings(BaseSettings):
 
     frontend_url: str = "http://localhost:3000"
 
+    # Hardt SMM / JustAnotherPanel
+    jap_api_url: str = "https://justanotherpanel.com/api/v2"
+    jap_api_key: str = ""
+
+    # Regra comercial:
+    # preço Hardt = custo JAP * multiplicador.
+    jap_markup_multiplier: float = 2.0
+    smm_usd_brl_rate: float = 0.0
+
     r2_account_id: str = ""
     r2_access_key_id: str = ""
     r2_secret_access_key: str = ""

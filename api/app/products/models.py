@@ -63,6 +63,10 @@ class Product(BaseModel):
     #
     # inventory:
     #   produto unitário entregue a partir de estoque.
+    #
+    # service:
+    #   serviço executado sob demanda, sem estoque
+    #   e sem geração de licença.
     delivery_type: Mapped[str] = mapped_column(
         String(30),
         nullable=False,

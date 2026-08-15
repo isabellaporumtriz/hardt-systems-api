@@ -15,6 +15,7 @@ class StoreProductResponse(BaseModel):
     slug: str
     description: str | None
     price: Decimal
+    delivery_type: str
     available_stock: int
 
 
@@ -38,7 +39,8 @@ class PurchaseResponse(BaseModel):
     product_id: UUID
     product_name: str
     product_slug: str
-    inventory_item_id: UUID
+    delivery_type: str
+    inventory_item_id: UUID | None
 
     quantity: int
     unit_price_brl: Decimal
@@ -85,3 +87,26 @@ class InventoryStockResponse(BaseModel):
     available: int
     sold: int
     total: int
+
+
+class SMMPurchaseDetailResponse(BaseModel):
+    purchase_id: UUID
+    product_id: UUID
+    product_name: str
+
+    status: str
+    quantity: int
+    amount_brl: Decimal
+    created_at: datetime
+
+    service_name: str
+    category: str | None
+    target_url: str
+
+    provider_status: str
+    start_count: int | None
+    remains: int | None
+
+    refill_available: bool = False
+    cancel_available: bool = False
+

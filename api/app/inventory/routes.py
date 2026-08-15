@@ -33,6 +33,7 @@ from app.inventory.schemas import (
     PurchaseDeliveryResponse,
     PurchaseResponse,
     StoreProductResponse,
+    SMMPurchaseDetailResponse,
 )
 from app.inventory.services import (
     InventoryError,
@@ -47,6 +48,8 @@ from app.inventory.services import (
     purchase_product,
 )
 from app.products.models import Product
+from app.smm.models import SMMOrder
+from app.smm.services import sync_smm_order
 from app.users.models import User
 from app.wallet.services import (
     InsufficientBalanceError,
@@ -83,6 +86,7 @@ def serialize_purchase(
         product_id=purchase.product_id,
         product_name=product.name,
         product_slug=product.slug,
+        delivery_type=product.delivery_type,
         inventory_item_id=(
             purchase.inventory_item_id
         ),
@@ -132,12 +136,18 @@ def list_store_products(
         .having(
             (
                 Product.delivery_type
-                == "licensed"
+                == "service"
             )
             | (
-                func.count(
-                    InventoryItem.id
-                ) > 0
+                (
+                    Product.delivery_type
+                    == "inventory"
+                )
+                & (
+                    func.count(
+                        InventoryItem.id
+                    ) > 0
+                )
             )
         )
         .order_by(
@@ -152,6 +162,7 @@ def list_store_products(
             slug=product.slug,
             description=product.description,
             price=product.price,
+            delivery_type=product.delivery_type,
             available_stock=int(
                 available_stock or 0
             ),
@@ -577,4 +588,91 @@ def download_purchase_delivery_csv(
                 "private, no-store, max-age=0"
             ),
         },
+    )
+
+
+@router.get(
+    "/purchases/{purchase_id}/smm",
+    response_model=SMMPurchaseDetailResponse,
+)
+def read_smm_purchase_detail(
+    purchase_id: UUID,
+    current_user: User = Depends(
+        get_current_user
+    ),
+    db: Session = Depends(get_db),
+) -> SMMPurchaseDetailResponse:
+
+    purchase = db.scalar(
+        select(Purchase).where(
+            Purchase.id == purchase_id,
+            Purchase.user_id == current_user.id,
+        )
+    )
+
+    if purchase is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Compra não encontrada.",
+        )
+
+    product = db.get(
+        Product,
+        purchase.product_id,
+    )
+
+    if product is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Produto da compra não encontrado.",
+        )
+
+    if product.delivery_type != "service":
+        raise HTTPException(
+            status_code=409,
+            detail="Esta compra não é um serviço SMM.",
+        )
+
+    order = db.scalar(
+        select(SMMOrder).where(
+            SMMOrder.purchase_id
+            == purchase.id
+        )
+    )
+
+    if order is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Pedido SMM não encontrado.",
+        )
+
+    if order.provider_order_id:
+        try:
+            order = sync_smm_order(
+                db,
+                order_id=order.id,
+                user_id=current_user.id,
+            )
+        except Exception:
+            # Se provider estiver temporariamente
+            # indisponível, devolvemos o último estado
+            # conhecido ao cliente.
+            db.rollback()
+
+    return SMMPurchaseDetailResponse(
+        purchase_id=purchase.id,
+        product_id=product.id,
+        product_name=product.name,
+        status=purchase.status,
+        quantity=order.quantity,
+        amount_brl=order.amount_brl,
+        created_at=purchase.created_at,
+        service_name=order.service_name,
+        category=order.category,
+        target_url=order.target_url,
+        provider_status=order.provider_status,
+        start_count=order.start_count,
+        remains=order.remains,
+        refill_available=False,
+        cancel_available=False,
     )
