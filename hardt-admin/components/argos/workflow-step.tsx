@@ -5,6 +5,7 @@ export type ArgosStepStatus =
   | "ready"
   | "running"
   | "done"
+  | "test"
   | "human"
   | "waiting"
   | "error";
@@ -46,6 +47,11 @@ const statusConfig: Record<
     label: "Concluído",
     className:
       "border-emerald-500/20 bg-emerald-500/10 text-emerald-300",
+  },
+  test: {
+    label: "Teste concluído",
+    className:
+      "border-violet-500/20 bg-violet-500/10 text-violet-300",
   },
   human: {
     label: "Ação humana",

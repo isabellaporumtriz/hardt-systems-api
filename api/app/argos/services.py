@@ -166,6 +166,7 @@ def create_job(
     *,
     operation: ArgosOperation,
     action: str,
+    selected_domain: str | None = None,
 ) -> ArgosJob:
     normalized = str(
         action or ""
@@ -206,6 +207,36 @@ def create_job(
             "DOMAIN_ALREADY_COMPLETE"
         )
 
+    candidates = [
+        str(candidate).strip().lower()
+        for candidate in (
+            operation.domain_candidates
+            or []
+        )
+        if str(candidate).strip()
+    ]
+
+    selected = str(
+        selected_domain or ""
+    ).strip().lower()
+
+    if normalized == ACTION_BUY_DOMAIN:
+        if not selected:
+            raise ValueError(
+                "SELECTED_DOMAIN_REQUIRED"
+            )
+
+        if selected not in candidates:
+            raise ValueError(
+                "SELECTED_DOMAIN_NOT_ALLOWED"
+            )
+
+        job_candidates = [
+            selected
+        ]
+    else:
+        job_candidates = candidates
+
     payload = {
         "operation_id": str(
             operation.id
@@ -216,10 +247,11 @@ def create_job(
         "client_slug": (
             operation.client_slug
         ),
-        "domain_candidates": list(
-            operation.domain_candidates
-            or []
+        "selected_domain": (
+            selected or None
         ),
+        "domain_candidates":
+            job_candidates,
     }
 
     job = ArgosJob(
@@ -366,7 +398,17 @@ def fail_job(
             "JOB_WORKER_MISMATCH"
         )
 
-    job.status = "failed"
+    is_dry_run = str(
+        error or ""
+    ).startswith(
+        "DRY_RUN_CONFIRMED"
+    )
+
+    job.status = (
+        "dry_run"
+        if is_dry_run
+        else "failed"
+    )
     job.error = error
     job.finished_at = datetime.now(
         timezone.utc
@@ -378,10 +420,17 @@ def fail_job(
     )
 
     if operation:
-        operation.last_message = (
-            f"{job.action} falhou: "
-            f"{error[:500]}"
-        )
+        if is_dry_run:
+            operation.last_message = (
+                "Teste concluído: Argos Agent "
+                "recebeu e validou o comando; "
+                "nenhuma ação externa foi executada."
+            )
+        else:
+            operation.last_message = (
+                f"{job.action} falhou: "
+                f"{error[:500]}"
+            )
 
     db.commit()
     db.refresh(job)

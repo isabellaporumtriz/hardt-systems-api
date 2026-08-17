@@ -34,6 +34,11 @@ class OperationResponse(BaseModel):
 
 class JobCreateRequest(BaseModel):
     action: str
+    selected_domain: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=253,
+    )
 
 
 class JobResponse(BaseModel):

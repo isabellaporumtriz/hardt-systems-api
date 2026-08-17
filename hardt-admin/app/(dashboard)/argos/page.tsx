@@ -115,6 +115,27 @@ function formatTime(value: string): string {
 }
 
 
+function isDryRunJob(
+  job: ArgosJob | null | undefined,
+): boolean {
+  if (!job) {
+    return false;
+  }
+
+  return (
+    job.status === "dry_run"
+    || (
+      job.status === "failed"
+      && Boolean(
+        job.error?.startsWith(
+          "DRY_RUN_CONFIRMED",
+        ),
+      )
+    )
+  );
+}
+
+
 function getErrorMessage(error: unknown): string {
   if (
     typeof error === "object"
@@ -179,6 +200,11 @@ export default function ArgosPage() {
   ] = useState(false);
 
   const [
+    selectedDomain,
+    setSelectedDomain,
+  ] = useState("");
+
+  const [
     uiError,
     setUiError,
   ] = useState<string | null>(null);
@@ -211,6 +237,25 @@ export default function ArgosPage() {
 
         setJobs(
           freshJobs,
+        );
+
+        setSelectedDomain(
+          (current) => {
+            const candidates =
+              freshOperation.domain_candidates
+              ?? [];
+
+            if (
+              current
+              && candidates.includes(
+                current,
+              )
+            ) {
+              return current;
+            }
+
+            return candidates[0] ?? "";
+          },
         );
       },
       [],
@@ -333,6 +378,11 @@ export default function ArgosPage() {
         created.company_name,
       );
       setJobs([]);
+
+      setSelectedDomain(
+        created.domain_candidates[0]
+        ?? "",
+      );
     } catch (error) {
       setUiError(
         getErrorMessage(error),
@@ -352,6 +402,28 @@ export default function ArgosPage() {
       return;
     }
 
+    const selected =
+      selectedDomain.trim().toLowerCase();
+
+    if (!selected) {
+      setUiError(
+        "Selecione o domínio que deseja comprar.",
+      );
+      return;
+    }
+
+    if (
+      !operation.domain_candidates.includes(
+        selected,
+      )
+    ) {
+      setUiError(
+        "O domínio selecionado não pertence "
+        + "aos candidatos autorizados.",
+      );
+      return;
+    }
+
     setQueuingDomain(true);
     setUiError(null);
 
@@ -359,6 +431,7 @@ export default function ArgosPage() {
       await createArgosJob(
         operation.id,
         "BUY_DOMAIN",
+        selected,
       );
 
       await refreshOperation(
@@ -393,6 +466,14 @@ export default function ArgosPage() {
       || queuingDomain
     ) {
       return "running";
+    }
+
+    if (
+      isDryRunJob(
+        latestDomainJob,
+      )
+    ) {
+      return "test";
     }
 
     if (
@@ -456,6 +537,19 @@ export default function ArgosPage() {
     }
 
     if (
+      isDryRunJob(
+        latestDomainJob,
+      )
+    ) {
+      return (
+        "🧪 Teste concluído. "
+        + "O Argos Agent recebeu e validou "
+        + "o comando; nenhuma compra foi "
+        + "realizada."
+      );
+    }
+
+    if (
       latestDomainJob?.status
         === "failed"
     ) {
@@ -511,6 +605,13 @@ export default function ArgosPage() {
           }
 
           if (
+            isDryRunJob(job)
+          ) {
+            message =
+              `🧪 ${job.action}: `
+              + "teste concluído; "
+              + "nenhuma ação externa executada.";
+          } else if (
             job.status === "failed"
           ) {
             message =
@@ -646,6 +747,27 @@ export default function ArgosPage() {
           }
         />
 
+        {operation && (
+          <div className="mt-3 flex justify-end">
+            <button
+              type="button"
+              disabled={
+                Boolean(activeDomainJob)
+              }
+              onClick={() => {
+                setOperation(null);
+                setCompanyName("");
+                setJobs([]);
+                setSelectedDomain("");
+                setUiError(null);
+              }}
+              className="rounded-lg border border-white/10 bg-white/[0.04] px-4 py-2 text-xs font-medium text-zinc-400 transition hover:bg-white/[0.08] hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
+            >
+              Nova operação
+            </button>
+          </div>
+        )}
+
 
         {creatingOperation && (
           <div className="mt-3 text-sm text-zinc-500">
@@ -693,7 +815,17 @@ export default function ArgosPage() {
 
             {operation.last_message && (
               <div className="mt-4 border-t border-white/[0.06] pt-3 text-xs text-zinc-500">
-                {operation.last_message}
+                {
+                  operation.last_message.includes(
+                    "DRY_RUN_CONFIRMED",
+                  )
+                    ? (
+                      "🧪 Teste concluído: "
+                      + "nenhuma ação externa "
+                      + "foi executada."
+                    )
+                    : operation.last_message
+                }
               </div>
             )}
           </section>
@@ -727,41 +859,125 @@ export default function ArgosPage() {
                     step.id,
                   );
 
+                const isDomain =
+                  step.id === "domain";
+
                 return (
-                  <WorkflowStep
+                  <div
                     key={step.id}
-                    number={
-                      index + 1
-                    }
-                    title={
-                      step.title
-                    }
-                    description={
-                      step.description
-                    }
-                    action={
-                      step.id === "domain"
-                      && activeDomainJob
-                        ? "Executando..."
-                        : step.action
-                    }
-                    status={
-                      status
-                    }
-                    acceptsFile={
-                      step.acceptsFile
-                    }
-                    detail={
-                      detailForStep(
-                        step.id,
+                    className="space-y-3"
+                  >
+                    {
+                      isDomain
+                      && operation
+                      && !operation.domain
+                      && (
+                        <div className="rounded-2xl border border-violet-500/15 bg-violet-500/[0.04] p-5">
+                          <div className="text-sm font-semibold text-white">
+                            Escolha o domínio que será registrado
+                          </div>
+
+                          <p className="mt-1 text-xs leading-5 text-zinc-500">
+                            O Argos comprará somente o domínio selecionado.
+                            Os outros são apenas alternativas e não serão cobrados.
+                          </p>
+
+                          <div className="mt-4 space-y-2">
+                            {
+                              operation.domain_candidates.map(
+                                (candidate) => (
+                                  <label
+                                    key={candidate}
+                                    className="flex cursor-pointer items-center gap-3 rounded-xl border border-white/[0.07] bg-black/20 px-4 py-3 transition hover:border-violet-500/30"
+                                  >
+                                    <input
+                                      type="radio"
+                                      name="argos-domain"
+                                      value={candidate}
+                                      checked={
+                                        selectedDomain
+                                        === candidate
+                                      }
+                                      disabled={
+                                        Boolean(
+                                          activeDomainJob,
+                                        )
+                                        || queuingDomain
+                                      }
+                                      onChange={() => {
+                                        setSelectedDomain(
+                                          candidate,
+                                        );
+                                        setUiError(null);
+                                      }}
+                                      className="h-4 w-4"
+                                    />
+
+                                    <span className="text-sm text-zinc-300">
+                                      {candidate}
+                                    </span>
+                                  </label>
+                                ),
+                              )
+                            }
+                          </div>
+
+                          <div className="mt-4 rounded-xl border border-white/[0.07] bg-black/20 px-4 py-3 text-xs text-zinc-400">
+                            Será comprado:{" "}
+                            <span className="font-semibold text-violet-300">
+                              {
+                                selectedDomain
+                                || "nenhum domínio selecionado"
+                              }
+                            </span>
+                            {" · "}Máximo autorizado: US$ 15
+                            {" · "}Quantidade: 1 domínio
+                          </div>
+                        </div>
                       )
                     }
-                    onAction={
-                      step.id === "domain"
-                        ? queueDomainPurchase
-                        : undefined
-                    }
-                  />
+
+                    <WorkflowStep
+                      number={
+                        index + 1
+                      }
+                      title={
+                        step.title
+                      }
+                      description={
+                        step.description
+                      }
+                      action={
+                        isDomain
+                          ? (
+                            activeDomainJob
+                              ? "Executando..."
+                              : (
+                                selectedDomain
+                                  ? "Comprar domínio selecionado"
+                                  : "Selecione um domínio"
+                              )
+                          )
+                          : step.action
+                      }
+                      status={
+                        status
+                      }
+                      acceptsFile={
+                        step.acceptsFile
+                      }
+                      detail={
+                        detailForStep(
+                          step.id,
+                        )
+                      }
+                      onAction={
+                        isDomain
+                          ? queueDomainPurchase
+                          : undefined
+                      }
+                    />
+                  </div>
                 );
               },
             )}

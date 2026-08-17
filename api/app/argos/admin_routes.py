@@ -169,6 +169,9 @@ def queue_operation_job(
             db,
             operation=operation,
             action=payload.action,
+            selected_domain=(
+                payload.selected_domain
+            ),
         )
     except ValueError as exc:
         raise HTTPException(

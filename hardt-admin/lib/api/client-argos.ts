@@ -93,11 +93,14 @@ export async function listArgosJobs(
 export async function createArgosJob(
   operationId: string,
   action: string,
+  selectedDomain?: string,
 ): Promise<ArgosJob> {
   const response = await api.post<ArgosJob>(
     `/admin/argos/operations/${operationId}/jobs`,
     {
       action,
+      selected_domain:
+        selectedDomain ?? null,
     },
   );
 
