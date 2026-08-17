@@ -6,6 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 
 from app.admin.routes import router as admin_router
+from app.argos.admin_routes import router as argos_admin_router
+from app.argos.worker_routes import router as argos_worker_router
 from app.auth.routes import router as auth_router
 from app.finance.routes import router as finance_router
 from app.licenses.routes import router as licenses_router
@@ -84,6 +86,16 @@ app.include_router(
 
 app.include_router(
     admin_router,
+    prefix="/api/v1",
+)
+
+app.include_router(
+    argos_admin_router,
+    prefix="/api/v1",
+)
+
+app.include_router(
+    argos_worker_router,
     prefix="/api/v1",
 )
 
