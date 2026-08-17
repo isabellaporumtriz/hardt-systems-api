@@ -15,6 +15,7 @@ from app.finance.models import Charge
 from app.licenses.models import License
 from app.products.models import Product
 from app.smm.models import SMMOrder
+from app.sms.models import SMSActivation
 from app.users.models import User
 from app.wallet.models import (
     Wallet,

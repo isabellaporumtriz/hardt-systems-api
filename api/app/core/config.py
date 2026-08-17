@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     jap_markup_multiplier: float = 2.0
     smm_usd_brl_rate: float = 0.0
 
+    # HardtSMS / SMS24h
+    sms24h_api_url: str = "https://api.sms24h.org/stubs/handler_api"
+    sms24h_api_key: str = ""
+    sms24h_markup_multiplier: float = 2.0
+
     r2_account_id: str = ""
     r2_access_key_id: str = ""
     r2_secret_access_key: str = ""
