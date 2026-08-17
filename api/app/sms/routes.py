@@ -136,6 +136,9 @@ def read_quote(
                 quote["service_name"]
             ),
             available=quote["available"],
+            available_count=(
+                quote["available_count"]
+            ),
             price_brl=quote["price_brl"],
         )
 
@@ -150,6 +153,7 @@ def read_quote(
             status_code=502,
             detail=str(exc),
         ) from exc
+
 
 
 @router.get(

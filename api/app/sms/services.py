@@ -131,43 +131,81 @@ def get_catalog(
 
     services: list[dict] = []
 
+    featured_order = {
+        "wa": 0,
+        "tg": 1,
+        "ig": 2,
+        "fb": 3,
+        "go": 4,
+        "dr": 5,
+    }
+
     for code, info in country_data.items():
-        if not isinstance(info, dict):
+        if not isinstance(
+            info,
+            dict,
+        ):
+            continue
+
+        code_string = str(code)
+
+        # Nunca transformar ID interno em nome.
+        # Se ainda não temos o nome validado,
+        # não exibimos no painel.
+        service_name = SERVICE_NAMES.get(
+            code_string
+        )
+
+        if service_name is None:
             continue
 
         count = int(
-            info.get("count", 0)
+            info.get(
+                "count",
+                0,
+            )
             or 0
         )
 
         if count <= 0:
             continue
 
-        code_string = str(code)
+        provider_cost = Decimal(
+            str(
+                info.get(
+                    "cost",
+                    0,
+                )
+                or 0
+            )
+        )
+
+        if provider_cost <= 0:
+            continue
 
         services.append(
             {
                 "code": code_string,
-                "name": (
-                    SERVICE_NAMES.get(
-                        code_string
-                    )
-                    or code_string.upper()
-                ),
+                "name": service_name,
                 "available_count": count,
+                "price_brl": _sell_price(
+                    provider_cost
+                ),
             }
         )
 
     services.sort(
         key=lambda item: (
-            0
-            if item["code"] == "wa"
-            else 1,
-            item["name"].lower(),
+            featured_order.get(
+                item["code"],
+                1000,
+            ),
+            item["name"].casefold(),
         )
     )
 
     return services
+
 
 
 def get_quote(
@@ -176,6 +214,15 @@ def get_quote(
     service_code: str,
 ) -> dict:
     provider = _provider()
+
+    service_name = SERVICE_NAMES.get(
+        service_code
+    )
+
+    if service_name is None:
+        raise SMSServiceError(
+            "Serviço não disponível no catálogo HardtSMS."
+        )
 
     raw = provider.get_prices(
         country=country,
@@ -191,35 +238,44 @@ def get_quote(
         service_code
     )
 
-    if not isinstance(info, dict):
+    if not isinstance(
+        info,
+        dict,
+    ):
         raise SMSServiceError(
             "Serviço indisponível."
         )
 
     provider_cost = Decimal(
         str(
-            info.get("cost")
+            info.get(
+                "cost",
+                0,
+            )
+            or 0
         )
     )
 
     count = int(
-        info.get("count", 0)
+        info.get(
+            "count",
+            0,
+        )
         or 0
     )
 
     return {
         "country": country,
         "service_code": service_code,
-        "service_name": (
-            SERVICE_NAMES.get(service_code)
-            or service_code.upper()
-        ),
+        "service_name": service_name,
         "available": count > 0,
+        "available_count": count,
         "provider_cost_brl": provider_cost,
         "price_brl": _sell_price(
             provider_cost
         ),
     }
+
 
 
 def _get_product(

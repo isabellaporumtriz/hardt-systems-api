@@ -4,6 +4,7 @@ import {
   AlertCircle,
   CheckCircle2,
   LoaderCircle,
+  MessageSquare,
   Minus,
   Package,
   Plus,
@@ -207,6 +208,24 @@ export default function StorePage() {
         <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-3">
           {products.map((product) => {
             if (product.delivery_type === "service") {
+              const isSMS = product.slug === "hardt-sms";
+
+              const serviceHref = isSMS
+                ? "/portal/store/sms"
+                : "/portal/store/smm";
+
+              const serviceFallback = isSMS
+                ? "Ativações SMS e números temporários sob demanda."
+                : "Serviços de social media sob demanda.";
+
+              const catalogLabel = isSMS
+                ? "WhatsApp · Telegram · Facebook · Google e mais"
+                : "Instagram · TikTok · YouTube · Facebook e mais";
+
+              const buttonLabel = isSMS
+                ? "Abrir painel SMS"
+                : "Abrir painel SMM";
+
               return (
                 <article
                   key={product.id}
@@ -215,7 +234,11 @@ export default function StorePage() {
                   <div className="p-6">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-500/15 text-violet-300">
-                        <Sparkles size={23} />
+                        {isSMS ? (
+                          <MessageSquare size={23} />
+                        ) : (
+                          <Sparkles size={23} />
+                        )}
                       </div>
 
                       <span className="rounded-full border border-emerald-400/15 bg-emerald-400/[0.07] px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-emerald-300">
@@ -228,8 +251,7 @@ export default function StorePage() {
                     </h2>
 
                     <p className="mt-3 min-h-12 text-sm leading-6 text-white/40">
-                      {product.description ||
-                        "Serviços de social media sob demanda."}
+                      {product.description || serviceFallback}
                     </p>
 
                     <div className="mt-7 rounded-2xl border border-white/[0.06] bg-black/10 p-4">
@@ -238,15 +260,15 @@ export default function StorePage() {
                       </p>
 
                       <p className="mt-2 font-bold text-white">
-                        Instagram · TikTok · YouTube · Facebook e mais
+                        {catalogLabel}
                       </p>
                     </div>
 
                     <Link
-                      href="/portal/store/smm"
+                      href={serviceHref}
                       className="mt-7 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-violet-600 font-bold text-white transition hover:bg-violet-500"
                     >
-                      Abrir painel SMM
+                      {buttonLabel}
                       <ArrowRight size={18} />
                     </Link>
                   </div>

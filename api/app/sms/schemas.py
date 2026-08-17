@@ -12,6 +12,8 @@ class SMSServiceResponse(BaseModel):
     code: str
     name: str
     available_count: int
+    price_brl: Decimal
+
 
 
 class SMSCatalogResponse(BaseModel):
@@ -24,8 +26,12 @@ class SMSQuoteResponse(BaseModel):
     country: int
     service_code: str
     service_name: str
+
     available: bool
+    available_count: int
+
     price_brl: Decimal
+
 
 
 class SMSActivationPurchaseRequest(BaseModel):
