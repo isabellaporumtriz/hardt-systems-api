@@ -4,6 +4,7 @@
 "use client";
 
 import {
+  Bot,
   ChevronRight,
   CreditCard,
   KeyRound,
@@ -48,6 +49,11 @@ const items = [
     icon: Monitor,
     title: "Dispositivos",
     href: "/devices",
+  },
+  {
+    icon: Bot,
+    title: "Argos",
+    href: "/argos",
   },
   {
     icon: Settings,
