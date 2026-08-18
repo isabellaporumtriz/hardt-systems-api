@@ -29,6 +29,7 @@ from app.finance.schemas import (
     ManualFinancialEntryCreateRequest,
     ManualFinancialEntryResponse,
     ManualFinancialEntryUpdateRequest,
+    FinancialManagementSummaryResponse,
 )
 
 
@@ -322,4 +323,24 @@ def cancel_manual_financial_entry(
     return services.cancel_manual_financial_entry(
         db,
         entry_id,
+    )
+
+
+@router.get(
+    "/management-summary",
+    response_model=FinancialManagementSummaryResponse,
+)
+def get_financial_management_summary(
+    start_at: datetime | None = Query(
+        default=None,
+    ),
+    end_at: datetime | None = Query(
+        default=None,
+    ),
+    db: Session = Depends(get_db),
+) -> FinancialManagementSummaryResponse:
+    return services.get_financial_management_summary(
+        db,
+        start_at=start_at,
+        end_at=end_at,
     )

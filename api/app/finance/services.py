@@ -21,6 +21,8 @@ from app.finance.schemas import (
     UpcomingChargeItemResponse,
     ManualFinancialEntryCreateRequest,
     ManualFinancialEntryUpdateRequest,
+    FinancialManagementSummaryResponse,
+    FinancialManagementUnitResponse,
 )
 from app.licenses.models import License
 from app.products.models import Product
@@ -1586,4 +1588,642 @@ def cancel_manual_financial_entry(
             db,
             entry,
         )
+    )
+
+
+MANAGEMENT_BUSINESS_UNITS = (
+    "hardt_api",
+    "hardt_studio",
+    "hardt_systems",
+    "corporate",
+)
+
+
+def get_financial_management_summary(
+    db: Session,
+    *,
+    start_at: datetime | None = None,
+    end_at: datetime | None = None,
+) -> FinancialManagementSummaryResponse:
+    """
+    Consolida o resultado gerencial da Hardt.
+
+    Receita automática:
+    - Charge.status == paid
+    - Purchase.status == completed
+
+    Receita/despesa manual:
+    - ManualFinancialEntry.status == settled
+
+    Custos diretos automáticos:
+    - SMS provider_cost_brl
+    - SMM provider_cost_usd * usd_brl_rate
+
+    WalletTopup NÃO é receita gerencial.
+    """
+
+    from decimal import Decimal
+
+    from sqlalchemy import (
+        func,
+        select,
+    )
+
+    from app.finance.models import (
+        Charge,
+        ManualFinancialEntry,
+    )
+    from app.inventory.models import Purchase
+    from app.products.models import Product
+    from app.sms.models import SMSActivation
+    from app.smm.models import SMMOrder
+
+    if (
+        start_at is not None
+        and end_at is not None
+        and end_at <= start_at
+    ):
+        raise HTTPException(
+            status_code=(
+                status.HTTP_422_UNPROCESSABLE_CONTENT
+            ),
+            detail=(
+                "end_at deve ser posterior a start_at."
+            ),
+        )
+
+    zero = Decimal("0.00")
+    hundred = Decimal("100.00")
+
+    data: dict[
+        str,
+        dict[str, Decimal],
+    ] = {
+        unit: {
+            "charge_revenue": zero,
+            "purchase_revenue": zero,
+            "manual_revenue": zero,
+            "sms_provider_cost": zero,
+            "smm_provider_cost": zero,
+            "manual_direct_cost": zero,
+            "operating_expenses": zero,
+            "other_expenses": zero,
+        }
+        for unit in MANAGEMENT_BUSINESS_UNITS
+    }
+
+    def normalize_unit(
+        value: str | None,
+    ) -> str:
+        if value in MANAGEMENT_BUSINESS_UNITS:
+            return str(value)
+
+        return "corporate"
+
+    def add_value(
+        unit: str | None,
+        field: str,
+        amount: Decimal | None,
+    ) -> None:
+        normalized_unit = normalize_unit(
+            unit
+        )
+
+        data[normalized_unit][field] += (
+            Decimal(amount or zero)
+        )
+
+    def apply_period(
+        statement,
+        column,
+    ):
+        if start_at is not None:
+            statement = statement.where(
+                column >= start_at
+            )
+
+        if end_at is not None:
+            statement = statement.where(
+                column < end_at
+            )
+
+        return statement
+
+    # ========================================================
+    # 1. CHARGES PAGAS
+    # ========================================================
+
+    charge_unit = func.coalesce(
+        Product.business_unit,
+        "corporate",
+    )
+
+    charge_statement = (
+        select(
+            charge_unit.label(
+                "business_unit"
+            ),
+            func.sum(
+                Charge.amount
+            ).label("amount"),
+        )
+        .select_from(Charge)
+        .outerjoin(
+            Product,
+            Product.id == Charge.product_id,
+        )
+        .where(
+            Charge.status == "paid",
+            Charge.paid_at.is_not(None),
+        )
+        .group_by(charge_unit)
+    )
+
+    charge_statement = apply_period(
+        charge_statement,
+        Charge.paid_at,
+    )
+
+    for unit, amount in db.execute(
+        charge_statement
+    ).all():
+        add_value(
+            unit,
+            "charge_revenue",
+            amount,
+        )
+
+    # ========================================================
+    # 2. PURCHASES CONCLUÍDAS
+    # ========================================================
+
+    purchase_statement = (
+        select(
+            Product.business_unit,
+            func.sum(
+                Purchase.amount_brl
+            ).label("amount"),
+        )
+        .select_from(Purchase)
+        .join(
+            Product,
+            Product.id == Purchase.product_id,
+        )
+        .where(
+            Purchase.status == "completed",
+            Purchase.completed_at.is_not(None),
+        )
+        .group_by(
+            Product.business_unit
+        )
+    )
+
+    purchase_statement = apply_period(
+        purchase_statement,
+        Purchase.completed_at,
+    )
+
+    for unit, amount in db.execute(
+        purchase_statement
+    ).all():
+        add_value(
+            unit,
+            "purchase_revenue",
+            amount,
+        )
+
+    # ========================================================
+    # 3. RECEITAS MANUAIS REALIZADAS
+    # ========================================================
+
+    manual_effective_at = func.coalesce(
+        ManualFinancialEntry.settled_at,
+        ManualFinancialEntry.occurred_at,
+    )
+
+    manual_income_statement = (
+        select(
+            ManualFinancialEntry.business_unit,
+            func.sum(
+                ManualFinancialEntry.amount
+            ).label("amount"),
+        )
+        .where(
+            ManualFinancialEntry.status
+            == "settled",
+            ManualFinancialEntry.entry_type
+            == "income",
+        )
+        .group_by(
+            ManualFinancialEntry.business_unit
+        )
+    )
+
+    manual_income_statement = apply_period(
+        manual_income_statement,
+        manual_effective_at,
+    )
+
+    for unit, amount in db.execute(
+        manual_income_statement
+    ).all():
+        add_value(
+            unit,
+            "manual_revenue",
+            amount,
+        )
+
+    # ========================================================
+    # 4. CUSTO DIRETO SMS
+    # ========================================================
+
+    sms_statement = (
+        select(
+            Product.business_unit,
+            func.sum(
+                SMSActivation.provider_cost_brl
+            ).label("amount"),
+        )
+        .select_from(SMSActivation)
+        .join(
+            Purchase,
+            Purchase.id
+            == SMSActivation.purchase_id,
+        )
+        .join(
+            Product,
+            Product.id
+            == Purchase.product_id,
+        )
+        .where(
+            Purchase.status == "completed",
+            Purchase.completed_at.is_not(None),
+        )
+        .group_by(
+            Product.business_unit
+        )
+    )
+
+    sms_statement = apply_period(
+        sms_statement,
+        Purchase.completed_at,
+    )
+
+    for unit, amount in db.execute(
+        sms_statement
+    ).all():
+        add_value(
+            unit,
+            "sms_provider_cost",
+            amount,
+        )
+
+    # ========================================================
+    # 5. CUSTO DIRETO SMM
+    # ========================================================
+
+    smm_cost_brl = (
+        SMMOrder.provider_cost_usd
+        * SMMOrder.usd_brl_rate
+    )
+
+    smm_statement = (
+        select(
+            Product.business_unit,
+            func.sum(
+                smm_cost_brl
+            ).label("amount"),
+        )
+        .select_from(SMMOrder)
+        .join(
+            Purchase,
+            Purchase.id
+            == SMMOrder.purchase_id,
+        )
+        .join(
+            Product,
+            Product.id
+            == Purchase.product_id,
+        )
+        .where(
+            Purchase.status == "completed",
+            Purchase.completed_at.is_not(None),
+        )
+        .group_by(
+            Product.business_unit
+        )
+    )
+
+    smm_statement = apply_period(
+        smm_statement,
+        Purchase.completed_at,
+    )
+
+    for unit, amount in db.execute(
+        smm_statement
+    ).all():
+        add_value(
+            unit,
+            "smm_provider_cost",
+            amount,
+        )
+
+    # ========================================================
+    # 6. DESPESAS MANUAIS REALIZADAS
+    # ========================================================
+
+    manual_expense_statement = (
+        select(
+            ManualFinancialEntry.business_unit,
+            ManualFinancialEntry.nature,
+            func.sum(
+                ManualFinancialEntry.amount
+            ).label("amount"),
+        )
+        .where(
+            ManualFinancialEntry.status
+            == "settled",
+            ManualFinancialEntry.entry_type
+            == "expense",
+        )
+        .group_by(
+            ManualFinancialEntry.business_unit,
+            ManualFinancialEntry.nature,
+        )
+    )
+
+    manual_expense_statement = apply_period(
+        manual_expense_statement,
+        manual_effective_at,
+    )
+
+    for (
+        unit,
+        nature,
+        amount,
+    ) in db.execute(
+        manual_expense_statement
+    ).all():
+        if nature == "direct_cost":
+            field = "manual_direct_cost"
+
+        elif nature == "operating_expense":
+            field = "operating_expenses"
+
+        else:
+            field = "other_expenses"
+
+        add_value(
+            unit,
+            field,
+            amount,
+        )
+
+    # ========================================================
+    # 7. CÁLCULOS POR UNIDADE
+    # ========================================================
+
+    unit_responses: list[
+        FinancialManagementUnitResponse
+    ] = []
+
+    total_revenue_all = sum(
+        (
+            values["charge_revenue"]
+            + values["purchase_revenue"]
+            + values["manual_revenue"]
+        )
+        for values in data.values()
+    )
+
+    for unit in MANAGEMENT_BUSINESS_UNITS:
+        values = data[unit]
+
+        total_revenue = (
+            values["charge_revenue"]
+            + values["purchase_revenue"]
+            + values["manual_revenue"]
+        )
+
+        direct_costs = (
+            values["sms_provider_cost"]
+            + values["smm_provider_cost"]
+            + values["manual_direct_cost"]
+        )
+
+        gross_profit = (
+            total_revenue
+            - direct_costs
+        )
+
+        net_result = (
+            gross_profit
+            - values["operating_expenses"]
+            - values["other_expenses"]
+        )
+
+        if total_revenue:
+            gross_margin_percent = (
+                gross_profit
+                / total_revenue
+                * hundred
+            )
+
+            net_margin_percent = (
+                net_result
+                / total_revenue
+                * hundred
+            )
+
+        else:
+            gross_margin_percent = zero
+            net_margin_percent = zero
+
+        if total_revenue_all:
+            revenue_share_percent = (
+                total_revenue
+                / total_revenue_all
+                * hundred
+            )
+        else:
+            revenue_share_percent = zero
+
+        unit_responses.append(
+            FinancialManagementUnitResponse(
+                business_unit=unit,
+
+                charge_revenue=(
+                    values[
+                        "charge_revenue"
+                    ]
+                ),
+                purchase_revenue=(
+                    values[
+                        "purchase_revenue"
+                    ]
+                ),
+                manual_revenue=(
+                    values[
+                        "manual_revenue"
+                    ]
+                ),
+                total_revenue=total_revenue,
+
+                sms_provider_cost=(
+                    values[
+                        "sms_provider_cost"
+                    ]
+                ),
+                smm_provider_cost=(
+                    values[
+                        "smm_provider_cost"
+                    ]
+                ),
+                manual_direct_cost=(
+                    values[
+                        "manual_direct_cost"
+                    ]
+                ),
+                direct_costs=direct_costs,
+
+                gross_profit=gross_profit,
+                gross_margin_percent=(
+                    gross_margin_percent
+                ),
+
+                operating_expenses=(
+                    values[
+                        "operating_expenses"
+                    ]
+                ),
+                other_expenses=(
+                    values[
+                        "other_expenses"
+                    ]
+                ),
+
+                net_result=net_result,
+                net_margin_percent=(
+                    net_margin_percent
+                ),
+
+                revenue_share_percent=(
+                    revenue_share_percent
+                ),
+            )
+        )
+
+    # ========================================================
+    # 8. CONSOLIDADO
+    # ========================================================
+
+    charge_revenue = sum(
+        row.charge_revenue
+        for row in unit_responses
+    )
+
+    purchase_revenue = sum(
+        row.purchase_revenue
+        for row in unit_responses
+    )
+
+    manual_revenue = sum(
+        row.manual_revenue
+        for row in unit_responses
+    )
+
+    total_revenue = (
+        charge_revenue
+        + purchase_revenue
+        + manual_revenue
+    )
+
+    sms_provider_cost = sum(
+        row.sms_provider_cost
+        for row in unit_responses
+    )
+
+    smm_provider_cost = sum(
+        row.smm_provider_cost
+        for row in unit_responses
+    )
+
+    manual_direct_cost = sum(
+        row.manual_direct_cost
+        for row in unit_responses
+    )
+
+    direct_costs = (
+        sms_provider_cost
+        + smm_provider_cost
+        + manual_direct_cost
+    )
+
+    gross_profit = (
+        total_revenue
+        - direct_costs
+    )
+
+    operating_expenses = sum(
+        row.operating_expenses
+        for row in unit_responses
+    )
+
+    other_expenses = sum(
+        row.other_expenses
+        for row in unit_responses
+    )
+
+    net_result = (
+        gross_profit
+        - operating_expenses
+        - other_expenses
+    )
+
+    if total_revenue:
+        gross_margin_percent = (
+            gross_profit
+            / total_revenue
+            * hundred
+        )
+
+        net_margin_percent = (
+            net_result
+            / total_revenue
+            * hundred
+        )
+    else:
+        gross_margin_percent = zero
+        net_margin_percent = zero
+
+    return FinancialManagementSummaryResponse(
+        start_at=start_at,
+        end_at=end_at,
+
+        charge_revenue=charge_revenue,
+        purchase_revenue=purchase_revenue,
+        manual_revenue=manual_revenue,
+        total_revenue=total_revenue,
+
+        sms_provider_cost=sms_provider_cost,
+        smm_provider_cost=smm_provider_cost,
+        manual_direct_cost=manual_direct_cost,
+        direct_costs=direct_costs,
+
+        gross_profit=gross_profit,
+        gross_margin_percent=(
+            gross_margin_percent
+        ),
+
+        operating_expenses=(
+            operating_expenses
+        ),
+        other_expenses=other_expenses,
+
+        net_result=net_result,
+        net_margin_percent=(
+            net_margin_percent
+        ),
+
+        units=unit_responses,
     )

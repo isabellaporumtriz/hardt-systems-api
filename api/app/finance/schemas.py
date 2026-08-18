@@ -405,3 +405,56 @@ class ManualFinancialEntryResponse(BaseModel):
     model_config = ConfigDict(
         from_attributes=True,
     )
+
+
+class FinancialManagementUnitResponse(BaseModel):
+    business_unit: str
+
+    charge_revenue: Decimal
+    purchase_revenue: Decimal
+    manual_revenue: Decimal
+    total_revenue: Decimal
+
+    sms_provider_cost: Decimal
+    smm_provider_cost: Decimal
+    manual_direct_cost: Decimal
+    direct_costs: Decimal
+
+    gross_profit: Decimal
+    gross_margin_percent: Decimal
+
+    operating_expenses: Decimal
+    other_expenses: Decimal
+
+    net_result: Decimal
+    net_margin_percent: Decimal
+
+    revenue_share_percent: Decimal
+
+
+class FinancialManagementSummaryResponse(BaseModel):
+    start_at: datetime | None
+    end_at: datetime | None
+
+    charge_revenue: Decimal
+    purchase_revenue: Decimal
+    manual_revenue: Decimal
+    total_revenue: Decimal
+
+    sms_provider_cost: Decimal
+    smm_provider_cost: Decimal
+    manual_direct_cost: Decimal
+    direct_costs: Decimal
+
+    gross_profit: Decimal
+    gross_margin_percent: Decimal
+
+    operating_expenses: Decimal
+    other_expenses: Decimal
+
+    net_result: Decimal
+    net_margin_percent: Decimal
+
+    units: list[
+        FinancialManagementUnitResponse
+    ]
