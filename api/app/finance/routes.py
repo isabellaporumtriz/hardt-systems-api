@@ -14,6 +14,7 @@ from app.billing.services import (
 )
 from app.core.database import get_db
 from app.finance import services
+from app.finance import product_analytics
 from app.users.models import User
 from app.finance.schemas import (
     ChargeCreateRequest,
@@ -30,6 +31,7 @@ from app.finance.schemas import (
     ManualFinancialEntryResponse,
     ManualFinancialEntryUpdateRequest,
     FinancialManagementSummaryResponse,
+    FinancialProductPerformanceSummaryResponse,
 )
 
 
@@ -340,6 +342,26 @@ def get_financial_management_summary(
     db: Session = Depends(get_db),
 ) -> FinancialManagementSummaryResponse:
     return services.get_financial_management_summary(
+        db,
+        start_at=start_at,
+        end_at=end_at,
+    )
+
+
+@router.get(
+    "/product-performance",
+    response_model=FinancialProductPerformanceSummaryResponse,
+)
+def get_product_financial_performance(
+    start_at: datetime | None = Query(
+        default=None,
+    ),
+    end_at: datetime | None = Query(
+        default=None,
+    ),
+    db: Session = Depends(get_db),
+) -> FinancialProductPerformanceSummaryResponse:
+    return product_analytics.get_product_financial_performance(
         db,
         start_at=start_at,
         end_at=end_at,

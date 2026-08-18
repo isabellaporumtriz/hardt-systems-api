@@ -458,3 +458,52 @@ class FinancialManagementSummaryResponse(BaseModel):
     units: list[
         FinancialManagementUnitResponse
     ]
+
+
+class FinancialProductPerformanceItemResponse(BaseModel):
+    product_id: UUID | None
+    product_name: str
+    product_slug: str | None
+    business_unit: str
+
+    charge_count: int
+    purchase_count: int
+    manual_income_count: int
+    total_sales_count: int
+
+    charge_revenue: Decimal
+    purchase_revenue: Decimal
+    manual_revenue: Decimal
+    total_revenue: Decimal
+
+    sms_provider_cost: Decimal
+    smm_provider_cost: Decimal
+    manual_direct_cost: Decimal
+    direct_costs: Decimal
+
+    gross_profit: Decimal
+    gross_margin_percent: Decimal
+
+    operating_expenses: Decimal
+    other_expenses: Decimal
+
+    net_result: Decimal
+    net_margin_percent: Decimal
+
+    revenue_share_percent: Decimal
+
+
+class FinancialProductPerformanceSummaryResponse(BaseModel):
+    start_at: datetime | None
+    end_at: datetime | None
+
+    total_revenue: Decimal
+    direct_costs: Decimal
+    gross_profit: Decimal
+    operating_expenses: Decimal
+    other_expenses: Decimal
+    net_result: Decimal
+
+    products: list[
+        FinancialProductPerformanceItemResponse
+    ]
