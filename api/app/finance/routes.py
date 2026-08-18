@@ -1,3 +1,4 @@
+from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, status
@@ -13,6 +14,7 @@ from app.billing.services import (
 )
 from app.core.database import get_db
 from app.finance import services
+from app.users.models import User
 from app.finance.schemas import (
     ChargeCreateRequest,
     ChargeCreateResponse,
@@ -24,6 +26,9 @@ from app.finance.schemas import (
     ChargeUpdateResponse,
     FinancialDashboardResponse,
     FinancialSummaryResponse,
+    ManualFinancialEntryCreateRequest,
+    ManualFinancialEntryResponse,
+    ManualFinancialEntryUpdateRequest,
 )
 
 
@@ -186,3 +191,135 @@ async def create_asaas_monthly_checkout(
         payload,
     )
 
+
+@router.get(
+    "/manual-entries",
+    response_model=list[
+        ManualFinancialEntryResponse
+    ],
+)
+def list_manual_financial_entries(
+    entry_type: str | None = Query(
+        default=None,
+        pattern=r"^(income|expense)$",
+    ),
+    business_unit: str | None = Query(
+        default=None,
+        pattern=(
+            r"^(hardt_api|hardt_studio|"
+            r"hardt_systems|corporate)$"
+        ),
+    ),
+    nature: str | None = Query(
+        default=None,
+        pattern=(
+            r"^(revenue|direct_cost|"
+            r"operating_expense|other)$"
+        ),
+    ),
+    entry_status: str | None = Query(
+        default=None,
+        alias="status",
+        pattern=r"^(pending|settled|cancelled)$",
+    ),
+    product_id: UUID | None = Query(
+        default=None,
+    ),
+    search: str | None = Query(
+        default=None,
+        min_length=1,
+        max_length=255,
+    ),
+    start_at: datetime | None = Query(
+        default=None,
+    ),
+    end_at: datetime | None = Query(
+        default=None,
+    ),
+    offset: int = Query(
+        default=0,
+        ge=0,
+    ),
+    limit: int = Query(
+        default=100,
+        ge=1,
+        le=500,
+    ),
+    db: Session = Depends(get_db),
+) -> list[ManualFinancialEntryResponse]:
+    return services.list_manual_financial_entries(
+        db,
+        entry_type=entry_type,
+        business_unit=business_unit,
+        nature=nature,
+        entry_status=entry_status,
+        product_id=product_id,
+        search=search,
+        start_at=start_at,
+        end_at=end_at,
+        offset=offset,
+        limit=limit,
+    )
+
+
+@router.post(
+    "/manual-entries",
+    response_model=ManualFinancialEntryResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_manual_financial_entry(
+    payload: ManualFinancialEntryCreateRequest,
+    current_admin: User = Depends(
+        get_current_admin
+    ),
+    db: Session = Depends(get_db),
+) -> ManualFinancialEntryResponse:
+    return services.create_manual_financial_entry(
+        db,
+        payload,
+        created_by_user_id=current_admin.id,
+    )
+
+
+@router.get(
+    "/manual-entries/{entry_id}",
+    response_model=ManualFinancialEntryResponse,
+)
+def get_manual_financial_entry(
+    entry_id: UUID,
+    db: Session = Depends(get_db),
+) -> ManualFinancialEntryResponse:
+    return services.get_manual_financial_entry_or_404(
+        db,
+        entry_id,
+    )
+
+
+@router.patch(
+    "/manual-entries/{entry_id}",
+    response_model=ManualFinancialEntryResponse,
+)
+def update_manual_financial_entry(
+    entry_id: UUID,
+    payload: ManualFinancialEntryUpdateRequest,
+    db: Session = Depends(get_db),
+) -> ManualFinancialEntryResponse:
+    return services.update_manual_financial_entry(
+        db,
+        entry_id,
+        payload,
+    )
+
+
+@router.post(
+    "/manual-entries/{entry_id}/cancel",
+    response_model=ManualFinancialEntryResponse,
+)
+def cancel_manual_financial_entry(
+    entry_id: UUID,
+    db: Session = Depends(get_db),
+) -> ManualFinancialEntryResponse:
+    return services.cancel_manual_financial_entry(
+        db,
+        entry_id,
+    )

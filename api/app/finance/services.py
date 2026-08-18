@@ -7,7 +7,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.finance import repositories
-from app.finance.models import Charge
+from app.finance.models import Charge, ManualFinancialEntry
 from app.finance.schemas import (
     ChargeCreateRequest,
     ChargeDetailResponse,
@@ -19,6 +19,8 @@ from app.finance.schemas import (
     FinancialSummaryResponse,
     MonthlyRevenueItemResponse,
     UpcomingChargeItemResponse,
+    ManualFinancialEntryCreateRequest,
+    ManualFinancialEntryUpdateRequest,
 )
 from app.licenses.models import License
 from app.products.models import Product
@@ -299,7 +301,7 @@ def validate_charge_relationships(
         if license_record.user_id != user_id:
             raise HTTPException(
                 status_code=(
-                    status.HTTP_422_UNPROCESSABLE_ENTITY
+                    status.HTTP_422_UNPROCESSABLE_CONTENT
                 ),
                 detail=(
                     "A licença informada não pertence "
@@ -314,7 +316,7 @@ def validate_charge_relationships(
         ):
             raise HTTPException(
                 status_code=(
-                    status.HTTP_422_UNPROCESSABLE_ENTITY
+                    status.HTTP_422_UNPROCESSABLE_CONTENT
                 ),
                 detail=(
                     "A licença informada não pertence "
@@ -445,7 +447,7 @@ def list_charges(
     ):
         raise HTTPException(
             status_code=(
-                status.HTTP_422_UNPROCESSABLE_ENTITY
+                status.HTTP_422_UNPROCESSABLE_CONTENT
             ),
             detail="Status de cobrança inválido.",
         )
@@ -703,7 +705,7 @@ def update_charge_status(
     ):
         raise HTTPException(
             status_code=(
-                status.HTTP_422_UNPROCESSABLE_ENTITY
+                status.HTTP_422_UNPROCESSABLE_CONTENT
             ),
             detail="Status de cobrança inválido.",
         )
@@ -1119,4 +1121,469 @@ def get_financial_dashboard(
         monthly_revenue=monthly_revenue,
         upcoming_charges=upcoming_charges,
         recent_charges=recent,
+    )
+
+
+ALLOWED_MANUAL_ENTRY_TYPES = {
+    "income",
+    "expense",
+}
+
+ALLOWED_MANUAL_BUSINESS_UNITS = {
+    "hardt_api",
+    "hardt_studio",
+    "hardt_systems",
+    "corporate",
+}
+
+ALLOWED_MANUAL_NATURES = {
+    "revenue",
+    "direct_cost",
+    "operating_expense",
+    "other",
+}
+
+ALLOWED_MANUAL_STATUSES = {
+    "pending",
+    "settled",
+    "cancelled",
+}
+
+
+def validate_manual_entry_semantics(
+    *,
+    entry_type: str,
+    nature: str,
+) -> None:
+    if (
+        entry_type == "income"
+        and nature
+        not in {
+            "revenue",
+            "other",
+        }
+    ):
+        raise HTTPException(
+            status_code=(
+                status.HTTP_422_UNPROCESSABLE_CONTENT
+            ),
+            detail=(
+                "Uma entrada não pode ser classificada "
+                "como custo direto ou despesa operacional."
+            ),
+        )
+
+    if (
+        entry_type == "expense"
+        and nature == "revenue"
+    ):
+        raise HTTPException(
+            status_code=(
+                status.HTTP_422_UNPROCESSABLE_CONTENT
+            ),
+            detail=(
+                "Uma saída não pode ser classificada "
+                "como receita."
+            ),
+        )
+
+
+def validate_manual_product_business_unit(
+    db: Session,
+    *,
+    product_id: UUID | None,
+    business_unit: str,
+) -> None:
+    if product_id is None:
+        return
+
+    product = get_product_or_404(
+        db,
+        product_id,
+    )
+
+    if product.business_unit != business_unit:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "A unidade do lançamento não corresponde "
+                "à unidade do produto selecionado."
+            ),
+        )
+
+
+def validate_manual_optional_user(
+    db: Session,
+    user_id: UUID | None,
+) -> None:
+    if user_id is None:
+        return
+
+    get_user_or_404(
+        db,
+        user_id,
+    )
+
+
+def validate_manual_external_reference(
+    db: Session,
+    value: str | None,
+    *,
+    exclude_entry_id: UUID | None = None,
+) -> str | None:
+    normalized = normalize_optional_text(
+        value
+    )
+
+    if normalized is None:
+        return None
+
+    existing = (
+        repositories
+        .get_manual_financial_entry_by_external_reference(
+            db,
+            normalized,
+        )
+    )
+
+    if (
+        existing is not None
+        and existing.id != exclude_entry_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Já existe um lançamento manual com "
+                "essa referência externa."
+            ),
+        )
+
+    return normalized
+
+
+def get_manual_financial_entry_or_404(
+    db: Session,
+    entry_id: UUID,
+) -> ManualFinancialEntry:
+    entry = (
+        repositories
+        .get_manual_financial_entry_by_id(
+            db,
+            entry_id,
+        )
+    )
+
+    if entry is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Lançamento financeiro não encontrado.",
+        )
+
+    return entry
+
+
+def list_manual_financial_entries(
+    db: Session,
+    *,
+    entry_type: str | None = None,
+    business_unit: str | None = None,
+    nature: str | None = None,
+    entry_status: str | None = None,
+    product_id: UUID | None = None,
+    search: str | None = None,
+    start_at: datetime | None = None,
+    end_at: datetime | None = None,
+    offset: int = 0,
+    limit: int = 100,
+) -> list[ManualFinancialEntry]:
+    return (
+        repositories
+        .list_manual_financial_entries(
+            db,
+            entry_type=entry_type,
+            business_unit=business_unit,
+            nature=nature,
+            status=entry_status,
+            product_id=product_id,
+            search=search,
+            start_at=start_at,
+            end_at=end_at,
+            offset=offset,
+            limit=limit,
+        )
+    )
+
+
+def create_manual_financial_entry(
+    db: Session,
+    payload: ManualFinancialEntryCreateRequest,
+    *,
+    created_by_user_id: UUID,
+) -> ManualFinancialEntry:
+    entry_type = payload.entry_type.strip().lower()
+    business_unit = (
+        payload.business_unit.strip().lower()
+    )
+    nature = payload.nature.strip().lower()
+    entry_status = payload.status.strip().lower()
+
+    validate_manual_entry_semantics(
+        entry_type=entry_type,
+        nature=nature,
+    )
+
+    validate_manual_product_business_unit(
+        db,
+        product_id=payload.product_id,
+        business_unit=business_unit,
+    )
+
+    validate_manual_optional_user(
+        db,
+        payload.user_id,
+    )
+
+    external_reference = (
+        validate_manual_external_reference(
+            db,
+            payload.external_reference,
+        )
+    )
+
+    settled_at = payload.settled_at
+
+    if entry_status == "settled":
+        settled_at = (
+            settled_at
+            or payload.occurred_at
+        )
+    else:
+        settled_at = None
+
+    entry = ManualFinancialEntry(
+        entry_type=entry_type,
+        business_unit=business_unit,
+        nature=nature,
+        category=payload.category.strip(),
+        product_id=payload.product_id,
+        user_id=payload.user_id,
+        counterparty=normalize_optional_text(
+            payload.counterparty,
+        ),
+        description=payload.description.strip(),
+        amount=payload.amount,
+        payment_method=normalize_optional_text(
+            payload.payment_method,
+        ),
+        status=entry_status,
+        occurred_at=payload.occurred_at,
+        settled_at=settled_at,
+        external_reference=external_reference,
+        notes=normalize_optional_text(
+            payload.notes,
+        ),
+        created_by_user_id=created_by_user_id,
+    )
+
+    return (
+        repositories
+        .create_manual_financial_entry(
+            db,
+            entry,
+        )
+    )
+
+
+def update_manual_financial_entry(
+    db: Session,
+    entry_id: UUID,
+    payload: ManualFinancialEntryUpdateRequest,
+) -> ManualFinancialEntry:
+    entry = get_manual_financial_entry_or_404(
+        db,
+        entry_id,
+    )
+
+    changes = payload.model_dump(
+        exclude_unset=True,
+    )
+
+    if not changes:
+        return entry
+
+    candidate_entry_type = (
+        changes.get(
+            "entry_type",
+            entry.entry_type,
+        )
+    )
+
+    candidate_business_unit = (
+        changes.get(
+            "business_unit",
+            entry.business_unit,
+        )
+    )
+
+    candidate_nature = (
+        changes.get(
+            "nature",
+            entry.nature,
+        )
+    )
+
+    candidate_product_id = (
+        changes["product_id"]
+        if "product_id" in changes
+        else entry.product_id
+    )
+
+    validate_manual_entry_semantics(
+        entry_type=candidate_entry_type,
+        nature=candidate_nature,
+    )
+
+    validate_manual_product_business_unit(
+        db,
+        product_id=candidate_product_id,
+        business_unit=candidate_business_unit,
+    )
+
+    if "user_id" in changes:
+        validate_manual_optional_user(
+            db,
+            changes["user_id"],
+        )
+
+    if "external_reference" in changes:
+        entry.external_reference = (
+            validate_manual_external_reference(
+                db,
+                changes[
+                    "external_reference"
+                ],
+                exclude_entry_id=entry.id,
+            )
+        )
+
+    if "entry_type" in changes:
+        entry.entry_type = (
+            changes["entry_type"]
+            .strip()
+            .lower()
+        )
+
+    if "business_unit" in changes:
+        entry.business_unit = (
+            changes["business_unit"]
+            .strip()
+            .lower()
+        )
+
+    if "nature" in changes:
+        entry.nature = (
+            changes["nature"]
+            .strip()
+            .lower()
+        )
+
+    if "category" in changes:
+        entry.category = (
+            changes["category"].strip()
+        )
+
+    if "product_id" in changes:
+        entry.product_id = (
+            changes["product_id"]
+        )
+
+    if "user_id" in changes:
+        entry.user_id = (
+            changes["user_id"]
+        )
+
+    if "counterparty" in changes:
+        entry.counterparty = (
+            normalize_optional_text(
+                changes["counterparty"],
+            )
+        )
+
+    if "description" in changes:
+        entry.description = (
+            changes["description"].strip()
+        )
+
+    if "amount" in changes:
+        entry.amount = changes["amount"]
+
+    if "payment_method" in changes:
+        entry.payment_method = (
+            normalize_optional_text(
+                changes["payment_method"],
+            )
+        )
+
+    if "occurred_at" in changes:
+        entry.occurred_at = (
+            changes["occurred_at"]
+        )
+
+    if "notes" in changes:
+        entry.notes = (
+            normalize_optional_text(
+                changes["notes"],
+            )
+        )
+
+    if "status" in changes:
+        entry.status = (
+            changes["status"]
+            .strip()
+            .lower()
+        )
+
+    if "settled_at" in changes:
+        entry.settled_at = (
+            changes["settled_at"]
+        )
+
+    if entry.status == "settled":
+        if entry.settled_at is None:
+            entry.settled_at = (
+                entry.occurred_at
+            )
+    else:
+        entry.settled_at = None
+
+    return (
+        repositories
+        .update_manual_financial_entry(
+            db,
+            entry,
+        )
+    )
+
+
+def cancel_manual_financial_entry(
+    db: Session,
+    entry_id: UUID,
+) -> ManualFinancialEntry:
+    entry = get_manual_financial_entry_or_404(
+        db,
+        entry_id,
+    )
+
+    if entry.status == "cancelled":
+        return entry
+
+    entry.status = "cancelled"
+    entry.settled_at = None
+
+    return (
+        repositories
+        .update_manual_financial_entry(
+            db,
+            entry,
+        )
     )

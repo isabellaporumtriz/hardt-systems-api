@@ -2,10 +2,10 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app.finance.models import Charge
+from app.finance.models import Charge, ManualFinancialEntry
 from app.licenses.models import License
 from app.products.models import Product
 from app.users.models import User
@@ -436,3 +436,150 @@ def get_upcoming_charges(
     return list(
         db.execute(statement).all()
     )
+
+
+def get_manual_financial_entry_by_id(
+    db: Session,
+    entry_id: UUID,
+) -> ManualFinancialEntry | None:
+    return db.get(
+        ManualFinancialEntry,
+        entry_id,
+    )
+
+
+def get_manual_financial_entry_by_external_reference(
+    db: Session,
+    external_reference: str,
+) -> ManualFinancialEntry | None:
+    return db.scalar(
+        select(
+            ManualFinancialEntry
+        ).where(
+            ManualFinancialEntry.external_reference
+            == external_reference
+        )
+    )
+
+
+def list_manual_financial_entries(
+    db: Session,
+    *,
+    entry_type: str | None = None,
+    business_unit: str | None = None,
+    nature: str | None = None,
+    status: str | None = None,
+    product_id: UUID | None = None,
+    search: str | None = None,
+    start_at: datetime | None = None,
+    end_at: datetime | None = None,
+    offset: int = 0,
+    limit: int = 100,
+) -> list[ManualFinancialEntry]:
+    statement = select(
+        ManualFinancialEntry
+    )
+
+    if entry_type:
+        statement = statement.where(
+            ManualFinancialEntry.entry_type
+            == entry_type
+        )
+
+    if business_unit:
+        statement = statement.where(
+            ManualFinancialEntry.business_unit
+            == business_unit
+        )
+
+    if nature:
+        statement = statement.where(
+            ManualFinancialEntry.nature
+            == nature
+        )
+
+    if status:
+        statement = statement.where(
+            ManualFinancialEntry.status
+            == status
+        )
+
+    if product_id:
+        statement = statement.where(
+            ManualFinancialEntry.product_id
+            == product_id
+        )
+
+    if start_at:
+        statement = statement.where(
+            ManualFinancialEntry.occurred_at
+            >= start_at
+        )
+
+    if end_at:
+        statement = statement.where(
+            ManualFinancialEntry.occurred_at
+            < end_at
+        )
+
+    if search:
+        value = f"%{search.strip()}%"
+
+        statement = statement.where(
+            or_(
+                ManualFinancialEntry.description.ilike(
+                    value
+                ),
+                ManualFinancialEntry.category.ilike(
+                    value
+                ),
+                func.coalesce(
+                    ManualFinancialEntry.counterparty,
+                    "",
+                ).ilike(value),
+                func.coalesce(
+                    ManualFinancialEntry.payment_method,
+                    "",
+                ).ilike(value),
+                func.coalesce(
+                    ManualFinancialEntry.external_reference,
+                    "",
+                ).ilike(value),
+            )
+        )
+
+    statement = (
+        statement
+        .order_by(
+            ManualFinancialEntry.occurred_at.desc(),
+            ManualFinancialEntry.created_at.desc(),
+        )
+        .offset(offset)
+        .limit(limit)
+    )
+
+    return list(
+        db.scalars(statement).all()
+    )
+
+
+def create_manual_financial_entry(
+    db: Session,
+    entry: ManualFinancialEntry,
+) -> ManualFinancialEntry:
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+
+    return entry
+
+
+def update_manual_financial_entry(
+    db: Session,
+    entry: ManualFinancialEntry,
+) -> ManualFinancialEntry:
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+
+    return entry

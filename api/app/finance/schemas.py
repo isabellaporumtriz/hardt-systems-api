@@ -243,3 +243,165 @@ class ChargeModelResponse(BaseModel):
     model_config = ConfigDict(
         from_attributes=True,
     )
+
+
+class ManualFinancialEntryCreateRequest(BaseModel):
+    entry_type: str = Field(
+        pattern=r"^(income|expense)$",
+    )
+
+    business_unit: str = Field(
+        pattern=r"^(hardt_api|hardt_studio|hardt_systems|corporate)$",
+    )
+
+    nature: str = Field(
+        pattern=r"^(revenue|direct_cost|operating_expense|other)$",
+    )
+
+    category: str = Field(
+        min_length=2,
+        max_length=80,
+    )
+
+    product_id: UUID | None = None
+    user_id: UUID | None = None
+
+    counterparty: str | None = Field(
+        default=None,
+        max_length=160,
+    )
+
+    description: str = Field(
+        min_length=2,
+        max_length=255,
+    )
+
+    amount: Decimal = Field(
+        gt=0,
+        max_digits=14,
+        decimal_places=2,
+    )
+
+    payment_method: str | None = Field(
+        default=None,
+        max_length=50,
+    )
+
+    status: str = Field(
+        default="settled",
+        pattern=r"^(pending|settled|cancelled)$",
+    )
+
+    occurred_at: datetime
+    settled_at: datetime | None = None
+
+    external_reference: str | None = Field(
+        default=None,
+        max_length=255,
+    )
+
+    notes: str | None = Field(
+        default=None,
+        max_length=4000,
+    )
+
+
+class ManualFinancialEntryUpdateRequest(BaseModel):
+    entry_type: str | None = Field(
+        default=None,
+        pattern=r"^(income|expense)$",
+    )
+
+    business_unit: str | None = Field(
+        default=None,
+        pattern=r"^(hardt_api|hardt_studio|hardt_systems|corporate)$",
+    )
+
+    nature: str | None = Field(
+        default=None,
+        pattern=r"^(revenue|direct_cost|operating_expense|other)$",
+    )
+
+    category: str | None = Field(
+        default=None,
+        min_length=2,
+        max_length=80,
+    )
+
+    product_id: UUID | None = None
+    user_id: UUID | None = None
+
+    counterparty: str | None = Field(
+        default=None,
+        max_length=160,
+    )
+
+    description: str | None = Field(
+        default=None,
+        min_length=2,
+        max_length=255,
+    )
+
+    amount: Decimal | None = Field(
+        default=None,
+        gt=0,
+        max_digits=14,
+        decimal_places=2,
+    )
+
+    payment_method: str | None = Field(
+        default=None,
+        max_length=50,
+    )
+
+    status: str | None = Field(
+        default=None,
+        pattern=r"^(pending|settled|cancelled)$",
+    )
+
+    occurred_at: datetime | None = None
+    settled_at: datetime | None = None
+
+    external_reference: str | None = Field(
+        default=None,
+        max_length=255,
+    )
+
+    notes: str | None = Field(
+        default=None,
+        max_length=4000,
+    )
+
+
+class ManualFinancialEntryResponse(BaseModel):
+    id: UUID
+
+    entry_type: str
+    business_unit: str
+    nature: str
+    category: str
+
+    product_id: UUID | None
+    user_id: UUID | None
+
+    counterparty: str | None
+    description: str
+    amount: Decimal
+    payment_method: str | None
+
+    status: str
+
+    occurred_at: datetime
+    settled_at: datetime | None
+
+    external_reference: str | None
+    notes: str | None
+
+    created_by_user_id: UUID
+
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(
+        from_attributes=True,
+    )
