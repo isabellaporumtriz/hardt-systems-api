@@ -6,6 +6,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import Date, cast, func, select
 from sqlalchemy.orm import Session
 
+from app.finance.exclusions import included_source_clause
 from app.finance.models import (
     Charge,
     ManualFinancialEntry,
@@ -216,6 +217,10 @@ def get_financial_time_series(
         .where(
             Charge.status == "paid",
             Charge.paid_at.is_not(None),
+            included_source_clause(
+                "charge",
+                Charge.id,
+            ),
         )
         .group_by(
             charge_revenue_bucket
@@ -268,6 +273,10 @@ def get_financial_time_series(
         .where(
             Purchase.status == "completed",
             Purchase.completed_at.is_not(None),
+            included_source_clause(
+                "purchase",
+                Purchase.id,
+            ),
         )
         .group_by(
             purchase_bucket
@@ -383,6 +392,10 @@ def get_financial_time_series(
         .where(
             Purchase.status == "completed",
             Purchase.completed_at.is_not(None),
+            included_source_clause(
+                "purchase",
+                Purchase.id,
+            ),
         )
         .group_by(
             sms_bucket
@@ -444,6 +457,10 @@ def get_financial_time_series(
         .where(
             Purchase.status == "completed",
             Purchase.completed_at.is_not(None),
+            included_source_clause(
+                "purchase",
+                Purchase.id,
+            ),
         )
         .group_by(
             smm_bucket
@@ -560,6 +577,10 @@ def get_financial_time_series(
         )
         .where(
             Charge.paid_at.is_not(None),
+            included_source_clause(
+                "charge",
+                Charge.id,
+            ),
         )
         .group_by(
             cash_charge_bucket
@@ -607,6 +628,10 @@ def get_financial_time_series(
             )
             .where(
                 WalletTopup.paid_at.is_not(None),
+                included_source_clause(
+                    "wallet_topup",
+                    WalletTopup.id,
+                ),
             )
             .group_by(
                 topup_bucket
@@ -653,6 +678,10 @@ def get_financial_time_series(
         )
         .where(
             Charge.refunded_at.is_not(None),
+            included_source_clause(
+                "charge",
+                Charge.id,
+            ),
         )
         .group_by(
             refund_bucket

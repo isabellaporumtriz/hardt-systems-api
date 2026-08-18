@@ -39,6 +39,12 @@ from app.finance.schemas import (
 )
 
 
+from app.finance import financial_ledger
+from app.finance.schemas import (
+    FinancialExclusionActionResponse,
+    FinancialLedgerItemResponse,
+)
+
 router = APIRouter(
     prefix="/admin/finance",
     tags=["Admin Finance"],
@@ -422,4 +428,54 @@ def get_financial_time_series(
         business_unit=business_unit,
         start_at=start_at,
         end_at=end_at,
+    )
+
+
+@router.get(
+    "/ledger",
+    response_model=list[
+        FinancialLedgerItemResponse
+    ],
+)
+def get_financial_ledger(
+    business_unit: str | None = Query(
+        default=None,
+        pattern=(
+            r"^(hardt_api|hardt_studio|"
+            r"hardt_systems|corporate)$"
+        ),
+    ),
+    start_at: datetime | None = Query(
+        default=None,
+    ),
+    end_at: datetime | None = Query(
+        default=None,
+    ),
+    db: Session = Depends(get_db),
+) -> list[FinancialLedgerItemResponse]:
+    return financial_ledger.list_financial_ledger(
+        db,
+        business_unit=business_unit,
+        start_at=start_at,
+        end_at=end_at,
+    )
+
+
+@router.post(
+    "/ledger/{source_type}/{source_id}/exclude",
+    response_model=FinancialExclusionActionResponse,
+)
+def exclude_financial_ledger_source(
+    source_type: str,
+    source_id: UUID,
+    current_admin: User = Depends(
+        get_current_admin
+    ),
+    db: Session = Depends(get_db),
+) -> FinancialExclusionActionResponse:
+    return financial_ledger.exclude_financial_source(
+        db,
+        source_type=source_type,
+        source_id=source_id,
+        excluded_by_user_id=current_admin.id,
     )

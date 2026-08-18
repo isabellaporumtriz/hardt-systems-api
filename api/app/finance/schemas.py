@@ -598,3 +598,34 @@ class FinancialTimeSeriesResponse(BaseModel):
     points: list[
         FinancialTimeSeriesPointResponse
     ]
+
+
+class FinancialLedgerItemResponse(BaseModel):
+    source_type: str
+    source_id: UUID
+
+    source_label: str
+
+    business_unit: str | None
+
+    product_id: UUID | None
+    product_name: str | None
+
+    direction: str
+    impact: str
+
+    description: str
+    amount: Decimal
+
+    status: str
+
+    occurred_at: datetime
+
+    is_manual: bool
+
+
+class FinancialExclusionActionResponse(BaseModel):
+    source_type: str
+    source_id: UUID
+
+    excluded: bool

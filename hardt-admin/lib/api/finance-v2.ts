@@ -16,6 +16,152 @@ export type FinanceGranularity =
 export type MoneyValue = string;
 
 
+export type ManualFinancialEntryType =
+  | "income"
+  | "expense";
+
+
+export type ManualFinancialEntryNature =
+  | "revenue"
+  | "direct_cost"
+  | "operating_expense"
+  | "other";
+
+
+export type ManualFinancialEntryStatus =
+  | "pending"
+  | "settled"
+  | "cancelled";
+
+
+export interface ManualFinancialEntryCreatePayload {
+  entry_type: ManualFinancialEntryType;
+  business_unit: FinanceBusinessUnit;
+  nature: ManualFinancialEntryNature;
+  category: string;
+
+  product_id?: string | null;
+  user_id?: string | null;
+
+  counterparty?: string | null;
+  description: string;
+  amount: number | string;
+
+  payment_method?: string | null;
+
+  status?: ManualFinancialEntryStatus;
+
+  occurred_at: string;
+  settled_at?: string | null;
+
+  external_reference?: string | null;
+  notes?: string | null;
+}
+
+
+export interface ManualFinancialEntry {
+  id: string;
+
+  entry_type: ManualFinancialEntryType;
+  business_unit: FinanceBusinessUnit;
+  nature: ManualFinancialEntryNature;
+  category: string;
+
+  product_id: string | null;
+  user_id: string | null;
+
+  counterparty: string | null;
+  description: string;
+  amount: MoneyValue;
+
+  payment_method: string | null;
+
+  status: ManualFinancialEntryStatus;
+
+  occurred_at: string;
+  settled_at: string | null;
+
+  external_reference: string | null;
+  notes: string | null;
+
+  created_by_user_id: string;
+
+  created_at: string;
+  updated_at: string;
+}
+
+
+
+export type FinancialLedgerSourceType =
+  | "charge"
+  | "purchase"
+  | "wallet_topup"
+  | "manual_entry";
+
+
+export type FinancialLedgerDirection =
+  | "inflow"
+  | "outflow";
+
+
+export type FinancialLedgerImpact =
+  | "dre"
+  | "cash"
+  | "dre_cash";
+
+
+export interface FinancialLedgerItem {
+  source_type: FinancialLedgerSourceType;
+  source_id: string;
+
+  source_label: string;
+
+  business_unit: FinanceBusinessUnit | null;
+
+  product_id: string | null;
+  product_name: string | null;
+
+  direction: FinancialLedgerDirection;
+  impact: FinancialLedgerImpact;
+
+  description: string;
+  amount: MoneyValue;
+
+  status: string;
+
+  occurred_at: string;
+
+  is_manual: boolean;
+}
+
+
+export interface FinanceLedgerParams
+  extends FinancePeriodParams {
+  business_unit?: FinanceBusinessUnit;
+}
+
+
+export interface FinancialExclusionActionResponse {
+  source_type: string;
+  source_id: string;
+  excluded: boolean;
+}
+
+
+export interface ManualFinancialEntryListParams {
+  entry_type?: ManualFinancialEntryType;
+  business_unit?: FinanceBusinessUnit;
+  nature?: ManualFinancialEntryNature;
+  status?: ManualFinancialEntryStatus;
+  product_id?: string;
+  search?: string;
+  start_at?: string;
+  end_at?: string;
+  offset?: number;
+  limit?: number;
+}
+
+
 export interface FinancePeriodParams {
   start_at?: string;
   end_at?: string;
@@ -298,6 +444,80 @@ export async function getFinanceTimeSeries(
       {
         params,
       },
+    );
+
+  return response.data;
+}
+
+
+
+
+export async function getFinanceLedger(
+  params?: FinanceLedgerParams,
+): Promise<FinancialLedgerItem[]> {
+  const response =
+    await api.get<FinancialLedgerItem[]>(
+      "/admin/finance/ledger",
+      {
+        params,
+      },
+    );
+
+  return response.data;
+}
+
+
+export async function excludeFinancialLedgerSource(
+  sourceType: FinancialLedgerSourceType,
+  sourceId: string,
+): Promise<FinancialExclusionActionResponse> {
+  const response =
+    await api.post<FinancialExclusionActionResponse>(
+      (
+        "/admin/finance/ledger/"
+        + `${sourceType}/${sourceId}/exclude`
+      ),
+    );
+
+  return response.data;
+}
+
+
+
+export async function listManualFinancialEntries(
+  params?: ManualFinancialEntryListParams,
+): Promise<ManualFinancialEntry[]> {
+  const response =
+    await api.get<ManualFinancialEntry[]>(
+      "/admin/finance/manual-entries",
+      {
+        params,
+      },
+    );
+
+  return response.data;
+}
+
+
+export async function cancelManualFinancialEntry(
+  entryId: string,
+): Promise<ManualFinancialEntry> {
+  const response =
+    await api.post<ManualFinancialEntry>(
+      `/admin/finance/manual-entries/${entryId}/cancel`,
+    );
+
+  return response.data;
+}
+
+
+export async function createManualFinancialEntry(
+  payload: ManualFinancialEntryCreatePayload,
+): Promise<ManualFinancialEntry> {
+  const response =
+    await api.post<ManualFinancialEntry>(
+      "/admin/finance/manual-entries",
+      payload,
     );
 
   return response.data;

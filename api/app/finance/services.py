@@ -1629,6 +1629,9 @@ def get_financial_management_summary(
         select,
     )
 
+    from app.finance.exclusions import (
+        included_source_clause,
+    )
     from app.finance.models import (
         Charge,
         ManualFinancialEntry,
@@ -1735,6 +1738,10 @@ def get_financial_management_summary(
         .where(
             Charge.status == "paid",
             Charge.paid_at.is_not(None),
+            included_source_clause(
+                "charge",
+                Charge.id,
+            ),
         )
         .group_by(charge_unit)
     )
@@ -1772,6 +1779,10 @@ def get_financial_management_summary(
         .where(
             Purchase.status == "completed",
             Purchase.completed_at.is_not(None),
+            included_source_clause(
+                "purchase",
+                Purchase.id,
+            ),
         )
         .group_by(
             Product.business_unit
@@ -1858,6 +1869,10 @@ def get_financial_management_summary(
         .where(
             Purchase.status == "completed",
             Purchase.completed_at.is_not(None),
+            included_source_clause(
+                "purchase",
+                Purchase.id,
+            ),
         )
         .group_by(
             Product.business_unit
@@ -1908,6 +1923,10 @@ def get_financial_management_summary(
         .where(
             Purchase.status == "completed",
             Purchase.completed_at.is_not(None),
+            included_source_clause(
+                "purchase",
+                Purchase.id,
+            ),
         )
         .group_by(
             Product.business_unit

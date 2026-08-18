@@ -5,6 +5,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.finance.exclusions import included_source_clause
 from app.finance.models import (
     Charge,
     ManualFinancialEntry,
@@ -150,6 +151,10 @@ def get_financial_cash_flow(
         )
         .where(
             Charge.paid_at.is_not(None),
+            included_source_clause(
+                "charge",
+                Charge.id,
+            ),
         )
         .group_by(
             charge_unit
@@ -208,6 +213,10 @@ def get_financial_cash_flow(
         )
         .where(
             WalletTopup.paid_at.is_not(None),
+            included_source_clause(
+                "wallet_topup",
+                WalletTopup.id,
+            ),
         )
     )
 
@@ -312,6 +321,10 @@ def get_financial_cash_flow(
         )
         .where(
             Charge.refunded_at.is_not(None),
+            included_source_clause(
+                "charge",
+                Charge.id,
+            ),
         )
         .group_by(
             charge_unit

@@ -7,6 +7,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.finance.exclusions import included_source_clause
 from app.finance.models import (
     Charge,
     ManualFinancialEntry,
@@ -225,6 +226,10 @@ def get_product_financial_performance(
         .where(
             Charge.status == "paid",
             Charge.paid_at.is_not(None),
+            included_source_clause(
+                "charge",
+                Charge.id,
+            ),
         )
         .group_by(
             Charge.product_id,
@@ -286,6 +291,10 @@ def get_product_financial_performance(
         .where(
             Purchase.status == "completed",
             Purchase.completed_at.is_not(None),
+            included_source_clause(
+                "purchase",
+                Purchase.id,
+            ),
         )
         .group_by(
             Purchase.product_id,
@@ -334,6 +343,7 @@ def get_product_financial_performance(
     manual_income_statement = (
         select(
             ManualFinancialEntry.product_id,
+            ManualFinancialEntry.category,
             Product.name,
             Product.slug,
             ManualFinancialEntry.business_unit,
@@ -360,6 +370,7 @@ def get_product_financial_performance(
         )
         .group_by(
             ManualFinancialEntry.product_id,
+            ManualFinancialEntry.category,
             Product.name,
             Product.slug,
             ManualFinancialEntry.business_unit,
@@ -376,7 +387,10 @@ def get_product_financial_performance(
     ).all():
         bucket = ensure_bucket(
             product_id=row.product_id,
-            product_name=row.name,
+            product_name=(
+                row.name
+                or row.category
+            ),
             product_slug=row.slug,
             business_unit=row.business_unit,
         )
@@ -421,6 +435,10 @@ def get_product_financial_performance(
         .where(
             Purchase.status == "completed",
             Purchase.completed_at.is_not(None),
+            included_source_clause(
+                "purchase",
+                Purchase.id,
+            ),
         )
         .group_by(
             Purchase.product_id,
@@ -484,6 +502,10 @@ def get_product_financial_performance(
         .where(
             Purchase.status == "completed",
             Purchase.completed_at.is_not(None),
+            included_source_clause(
+                "purchase",
+                Purchase.id,
+            ),
         )
         .group_by(
             Purchase.product_id,
@@ -521,6 +543,7 @@ def get_product_financial_performance(
     manual_expense_statement = (
         select(
             ManualFinancialEntry.product_id,
+            ManualFinancialEntry.category,
             Product.name,
             Product.slug,
             ManualFinancialEntry.business_unit,
@@ -545,6 +568,7 @@ def get_product_financial_performance(
         )
         .group_by(
             ManualFinancialEntry.product_id,
+            ManualFinancialEntry.category,
             Product.name,
             Product.slug,
             ManualFinancialEntry.business_unit,
@@ -562,7 +586,10 @@ def get_product_financial_performance(
     ).all():
         bucket = ensure_bucket(
             product_id=row.product_id,
-            product_name=row.name,
+            product_name=(
+                row.name
+                or row.category
+            ),
             product_slug=row.slug,
             business_unit=row.business_unit,
         )
