@@ -750,9 +750,12 @@ def sync_smm_order(
         pass
 
     order.provider_error = None
-    order.updated_at = datetime.now(
+
+    sync_at = datetime.now(
         timezone.utc
     )
+
+    order.updated_at = sync_at
 
     purchase = db.get(
         Purchase,
@@ -768,6 +771,9 @@ def sync_smm_order(
         }:
             purchase.status = "completed"
 
+            if purchase.completed_at is None:
+                purchase.completed_at = sync_at
+
         elif normalized in {
             "canceled",
             "cancelled",
@@ -778,9 +784,7 @@ def sync_smm_order(
         else:
             purchase.status = "processing"
 
-        purchase.updated_at = datetime.now(
-            timezone.utc
-        )
+        purchase.updated_at = sync_at
 
         db.add(purchase)
 
