@@ -16,6 +16,7 @@ from app.core.database import get_db
 from app.finance import services
 from app.finance import product_analytics
 from app.finance import cash_flow
+from app.finance import time_series
 from app.users.models import User
 from app.finance.schemas import (
     ChargeCreateRequest,
@@ -34,6 +35,7 @@ from app.finance.schemas import (
     FinancialManagementSummaryResponse,
     FinancialProductPerformanceSummaryResponse,
     FinancialCashFlowSummaryResponse,
+    FinancialTimeSeriesResponse,
 )
 
 
@@ -385,6 +387,39 @@ def get_financial_cash_flow(
 ) -> FinancialCashFlowSummaryResponse:
     return cash_flow.get_financial_cash_flow(
         db,
+        start_at=start_at,
+        end_at=end_at,
+    )
+
+
+@router.get(
+    "/time-series",
+    response_model=FinancialTimeSeriesResponse,
+)
+def get_financial_time_series(
+    granularity: str = Query(
+        default="day",
+        pattern=r"^(day|month)$",
+    ),
+    business_unit: str | None = Query(
+        default=None,
+        pattern=(
+            r"^(hardt_api|hardt_studio|"
+            r"hardt_systems|corporate)$"
+        ),
+    ),
+    start_at: datetime | None = Query(
+        default=None,
+    ),
+    end_at: datetime | None = Query(
+        default=None,
+    ),
+    db: Session = Depends(get_db),
+) -> FinancialTimeSeriesResponse:
+    return time_series.get_financial_time_series(
+        db,
+        granularity=granularity,
+        business_unit=business_unit,
         start_at=start_at,
         end_at=end_at,
     )

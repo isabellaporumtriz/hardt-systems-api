@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
 
@@ -552,4 +552,49 @@ class FinancialCashFlowSummaryResponse(BaseModel):
 
     units: list[
         FinancialCashFlowUnitResponse
+    ]
+
+
+class FinancialTimeSeriesPointResponse(BaseModel):
+    period_start: date
+
+    charge_revenue: Decimal
+    purchase_revenue: Decimal
+    manual_revenue: Decimal
+    total_revenue: Decimal
+
+    sms_provider_cost: Decimal
+    smm_provider_cost: Decimal
+    manual_direct_cost: Decimal
+    direct_costs: Decimal
+
+    operating_expenses: Decimal
+    other_expenses: Decimal
+
+    gross_profit: Decimal
+    net_result: Decimal
+
+    charge_inflows: Decimal
+    wallet_topup_inflows: Decimal
+    manual_inflows: Decimal
+    total_inflows: Decimal
+
+    charge_refund_outflows: Decimal
+    manual_outflows: Decimal
+    total_outflows: Decimal
+
+    net_cash_flow: Decimal
+
+
+class FinancialTimeSeriesResponse(BaseModel):
+    granularity: str
+    timezone: str
+
+    business_unit: str | None
+
+    start_at: datetime | None
+    end_at: datetime | None
+
+    points: list[
+        FinancialTimeSeriesPointResponse
     ]
