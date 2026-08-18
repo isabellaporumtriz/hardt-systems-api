@@ -38,6 +38,11 @@ class ProductCreate(BaseModel):
 
     is_active: bool = True
 
+    business_unit: str = Field(
+        default="hardt_systems",
+        pattern=r"^(hardt_api|hardt_studio|hardt_systems|corporate)$",
+    )
+
     delivery_type: str = Field(
         default="inventory",
         pattern=r"^(licensed|inventory|service)$",
@@ -77,6 +82,11 @@ class ProductUpdate(BaseModel):
 
     is_active: bool | None = None
 
+    business_unit: str | None = Field(
+        default=None,
+        pattern=r"^(hardt_api|hardt_studio|hardt_systems|corporate)$",
+    )
+
     delivery_type: str | None = Field(
         default=None,
         pattern=r"^(licensed|inventory|service)$",
@@ -91,6 +101,7 @@ class ProductResponse(BaseModel):
     version: str
     price: Decimal
     is_active: bool
+    business_unit: str
     delivery_type: str
     created_at: datetime
     updated_at: datetime

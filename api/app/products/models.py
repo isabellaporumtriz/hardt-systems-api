@@ -48,6 +48,26 @@ class Product(BaseModel):
         default=True,
     )
 
+    # Unidade de negócio responsável pelo produto.
+    #
+    # hardt_api:
+    #   Produtos e serviços da hardt.api.
+    #
+    # hardt_studio:
+    #   Produtos e serviços da hardt.studio.
+    #
+    # hardt_systems:
+    #   Produtos SaaS e serviços da hardt.systems.
+    #
+    # corporate:
+    #   Uso excepcional para itens corporativos compartilhados.
+    business_unit: Mapped[str] = mapped_column(
+        String(30),
+        nullable=False,
+        default="hardt_systems",
+        server_default="hardt_systems",
+        index=True,
+    )
 
     billing_type: Mapped[str] = mapped_column(
         String(30),
