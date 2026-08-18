@@ -202,6 +202,7 @@ hardt-admin/lib/*
 !hardt-admin/lib/api/
 hardt-admin/lib/api/*
 !hardt-admin/lib/api/client-smm.ts
+!hardt-admin/lib/api/finance-v2.ts
 
 # Python caches re-included pelo downloads module
 api/app/downloads/__pycache__/
