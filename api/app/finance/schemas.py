@@ -507,3 +507,49 @@ class FinancialProductPerformanceSummaryResponse(BaseModel):
     products: list[
         FinancialProductPerformanceItemResponse
     ]
+
+
+class FinancialCashFlowUnitResponse(BaseModel):
+    business_unit: str
+
+    charge_inflows: Decimal
+    manual_inflows: Decimal
+    attributable_inflows: Decimal
+
+    charge_refund_outflows: Decimal
+    manual_outflows: Decimal
+    attributable_outflows: Decimal
+
+    net_attributable_cash_flow: Decimal
+
+
+class FinancialCashFlowSummaryResponse(BaseModel):
+    start_at: datetime | None
+    end_at: datetime | None
+
+    charge_inflow_count: int
+    charge_inflows: Decimal
+
+    wallet_topup_count: int
+    wallet_topup_inflows: Decimal
+
+    manual_inflow_count: int
+    manual_inflows: Decimal
+
+    total_inflows: Decimal
+
+    charge_refund_count: int
+    charge_refund_outflows: Decimal
+
+    manual_outflow_count: int
+    manual_outflows: Decimal
+
+    total_outflows: Decimal
+
+    net_cash_flow: Decimal
+
+    unallocated_wallet_inflows: Decimal
+
+    units: list[
+        FinancialCashFlowUnitResponse
+    ]
