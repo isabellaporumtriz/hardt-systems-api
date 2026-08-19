@@ -11,18 +11,23 @@ import {
   ActivityLog,
   type ArgosLogEntry,
 } from "@/components/argos/activity-log";
-import { CompanyHeader } from "@/components/argos/company-header";
+import { CnpjIntakeCard } from "@/components/argos/cnpj-intake-card";
+import { LegacyReconciliationCard } from "@/components/argos/legacy-reconciliation-card";
 import {
   WorkflowStep,
   type ArgosStepStatus,
 } from "@/components/argos/workflow-step";
 
 import {
+  confirmArgosCnpjIntake,
   createArgosJob,
-  createArgosOperation,
+  decideArgosLegacyReconciliation,
   getArgosOperation,
   listArgosJobs,
   listArgosOperations,
+  uploadArgosCnpjCard,
+  type ArgosCnpjIntake,
+  type ArgosCompanyData,
   type ArgosJob,
   type ArgosOperation,
 } from "@/lib/api/client-argos";
@@ -40,10 +45,10 @@ type StepDefinition = {
 const workflow: StepDefinition[] = [
   {
     id: "domain",
-    title: "Comprar domínio",
+    title: "Endereço web",
     description:
-      "Consulta os candidatos e registra o primeiro domínio disponível dentro do teto configurado no Argos.",
-    action: "Comprar domínio",
+      "Aloca um subdomínio em um root existente. Se o lote estiver cheio, o Argos abre um novo domínio raiz.",
+    action: "Alocar / abrir lote",
   },
   {
     id: "landing",
@@ -74,19 +79,19 @@ const workflow: StepDefinition[] = [
     action: "Conectar domínio",
   },
   {
-    id: "documents",
-    title: "Ler documentação",
+    id: "business_info",
+    title: "Preencher Business Info",
     description:
-      "Receber os PDFs e extrair os dados empresariais.",
-    action: "Processar PDFs",
-    acceptsFile: true,
+      "Preencher e confirmar os dados empresariais no Business Portfolio da Meta.",
+    action: "Preencher Business Info",
   },
   {
-    id: "business_info",
-    title: "Preencher dados da empresa",
+    id: "documents",
+    title: "Documentação complementar",
     description:
-      "Preencher os dados empresariais solicitados pela Meta.",
-    action: "Preencher dados",
+      "Anexar documentos adicionais quando a Meta solicitar verificação.",
+    action: "Anexar documentos",
+    acceptsFile: true,
   },
   {
     id: "verification",
@@ -136,7 +141,9 @@ function isDryRunJob(
 }
 
 
-function getErrorMessage(error: unknown): string {
+function getErrorMessage(
+  error: unknown,
+): string {
   if (
     typeof error === "object"
     && error !== null
@@ -145,7 +152,7 @@ function getErrorMessage(error: unknown): string {
     const candidate = error as {
       response?: {
         data?: {
-          detail?: string;
+          detail?: unknown;
         };
       };
     };
@@ -153,8 +160,49 @@ function getErrorMessage(error: unknown): string {
     const detail =
       candidate.response?.data?.detail;
 
-    if (detail) {
+    if (
+      typeof detail === "string"
+      && detail
+    ) {
       return detail;
+    }
+
+    if (Array.isArray(detail)) {
+      const messages =
+        detail
+          .map((item) => {
+            if (
+              typeof item === "object"
+              && item !== null
+              && "msg" in item
+              && typeof item.msg === "string"
+            ) {
+              return item.msg;
+            }
+
+            if (typeof item === "string") {
+              return item;
+            }
+
+            return null;
+          })
+          .filter(
+            (item): item is string =>
+              Boolean(item),
+          );
+
+      if (messages.length > 0) {
+        return messages.join(" · ");
+      }
+
+      return "A API rejeitou os dados enviados.";
+    }
+
+    if (
+      typeof detail === "object"
+      && detail !== null
+    ) {
+      return "A API rejeitou os dados enviados.";
     }
   }
 
@@ -166,11 +214,81 @@ function getErrorMessage(error: unknown): string {
 }
 
 
+function normalizeCompanyData(
+  source:
+    | Partial<ArgosCompanyData>
+    | null
+    | undefined,
+): ArgosCompanyData {
+  return {
+    cnpj:
+      source?.cnpj ?? "",
+
+    razao_social:
+      source?.razao_social ?? "",
+
+    nome_fantasia:
+      source?.nome_fantasia ?? "",
+
+    data_abertura:
+      source?.data_abertura ?? "",
+
+    situacao_cadastral:
+      source?.situacao_cadastral ?? "",
+
+    cnae_principal:
+      source?.cnae_principal ?? "",
+
+    atividade_principal:
+      source?.atividade_principal ?? "",
+
+    natureza_juridica:
+      source?.natureza_juridica ?? "",
+
+    logradouro:
+      source?.logradouro ?? "",
+
+    numero:
+      source?.numero ?? "",
+
+    complemento:
+      source?.complemento ?? "",
+
+    bairro:
+      source?.bairro ?? "",
+
+    cidade:
+      source?.cidade ?? "",
+
+    estado:
+      source?.estado ?? "",
+
+    cep:
+      source?.cep ?? "",
+
+    email:
+      source?.email ?? "",
+
+    telefone:
+      source?.telefone ?? "",
+  };
+}
+
+
 export default function ArgosPage() {
   const [
-    companyName,
-    setCompanyName,
-  ] = useState("");
+    intake,
+    setIntake,
+  ] = useState<ArgosCnpjIntake | null>(
+    null,
+  );
+
+  const [
+    companyData,
+    setCompanyData,
+  ] = useState<ArgosCompanyData | null>(
+    null,
+  );
 
   const [
     operation,
@@ -190,13 +308,33 @@ export default function ArgosPage() {
   ] = useState(true);
 
   const [
-    creatingOperation,
-    setCreatingOperation,
+    uploadingCnpj,
+    setUploadingCnpj,
+  ] = useState(false);
+
+  const [
+    confirmingCnpj,
+    setConfirmingCnpj,
+  ] = useState(false);
+
+  const [
+    decidingLegacy,
+    setDecidingLegacy,
   ] = useState(false);
 
   const [
     queuingDomain,
     setQueuingDomain,
+  ] = useState(false);
+
+  const [
+    queuingLanding,
+    setQueuingLanding,
+  ] = useState(false);
+
+  const [
+    queuingMetaLogin,
+    setQueuingMetaLogin,
   ] = useState(false);
 
   const [
@@ -208,6 +346,17 @@ export default function ArgosPage() {
     uiError,
     setUiError,
   ] = useState<string | null>(null);
+
+
+  const [
+    queuingMetaDomain,
+    setQueuingMetaDomain,
+  ] = useState(false);
+
+  const [
+    queuingBusinessInfo,
+    setQueuingBusinessInfo,
+  ] = useState(false);
 
 
   const refreshOperation =
@@ -229,10 +378,6 @@ export default function ArgosPage() {
 
         setOperation(
           freshOperation,
-        );
-
-        setCompanyName(
-          freshOperation.company_name,
         );
 
         setJobs(
@@ -294,8 +439,12 @@ export default function ArgosPage() {
       () =>
         jobs.find(
           (job) =>
-            job.action
-              === "BUY_DOMAIN"
+            (
+              job.action
+                === "ALLOCATE_SUBDOMAIN"
+              || job.action
+                === "BUY_DOMAIN"
+            )
             && (
               job.status === "queued"
               || job.status === "running"
@@ -305,13 +454,166 @@ export default function ArgosPage() {
     );
 
 
-  const latestDomainJob =
+  const activeLegacyJob =
     useMemo(
       () =>
         jobs.find(
           (job) =>
             job.action
-              === "BUY_DOMAIN"
+              === "RECONCILE_LEGACY"
+            && (
+              job.status === "queued"
+              || job.status === "running"
+            ),
+        ) ?? null,
+      [jobs],
+    );
+
+
+  const latestLegacyJob =
+    useMemo(
+      () =>
+        jobs.find(
+          (job) =>
+            job.action
+              === "RECONCILE_LEGACY"
+        ) ?? null,
+      [jobs],
+    );
+
+
+  const activeMetaLoginJob =
+    useMemo(
+      () =>
+        jobs.find(
+          (job) =>
+            job.action
+              === "LOGIN_META"
+            && (
+              job.status === "queued"
+              || job.status === "running"
+            ),
+        ) ?? null,
+      [jobs],
+    );
+
+
+  const latestMetaLoginJob =
+    useMemo(
+      () =>
+        jobs.find(
+          (job) =>
+            job.action
+              === "LOGIN_META"
+        ) ?? null,
+      [jobs],
+    );
+
+
+  const activeMetaDomainJob =
+    useMemo(
+      () =>
+        jobs.find(
+          (job) =>
+            job.action
+              === "META_DOMAIN"
+            && (
+              job.status === "queued"
+              || job.status === "running"
+            ),
+        ) ?? null,
+      [jobs],
+    );
+
+
+  const latestMetaDomainJob =
+    useMemo(
+      () =>
+        jobs.find(
+          (job) =>
+            job.action
+              === "META_DOMAIN"
+        ) ?? null,
+      [jobs],
+    );
+
+
+  const activeBusinessInfoJob =
+    useMemo(
+      () =>
+        jobs.find(
+          (job) =>
+            job.action
+              === "BUSINESS_INFO"
+            && (
+              job.status === "queued"
+              || job.status === "running"
+            ),
+        ) ?? null,
+      [jobs],
+    );
+
+
+  const latestBusinessInfoJob =
+    useMemo(
+      () =>
+        jobs.find(
+          (job) =>
+            job.action
+              === "BUSINESS_INFO"
+        ) ?? null,
+      [jobs],
+    );
+
+
+  const legacyBlocksDomain =
+    operation
+      ?.legacy_reconciliation_status
+      === "pending"
+    || operation
+      ?.legacy_reconciliation_status
+      === "candidate";
+
+
+  const latestDomainJob =
+    useMemo(
+      () =>
+        jobs.find(
+          (job) =>
+            (
+              job.action
+                === "ALLOCATE_SUBDOMAIN"
+              || job.action
+                === "BUY_DOMAIN"
+            )
+        ) ?? null,
+      [jobs],
+    );
+
+
+  const activeLandingJob =
+    useMemo(
+      () =>
+        jobs.find(
+          (job) =>
+            job.action
+              === "CREATE_LANDING_PAGE"
+            && (
+              job.status === "queued"
+              || job.status === "running"
+            ),
+        ) ?? null,
+      [jobs],
+    );
+
+
+  const latestLandingJob =
+    useMemo(
+      () =>
+        jobs.find(
+          (job) =>
+            job.action
+              === "CREATE_LANDING_PAGE"
         ) ?? null,
       [jobs],
     );
@@ -320,7 +622,11 @@ export default function ArgosPage() {
   useEffect(() => {
     if (
       !operation
-      || !activeDomainJob
+      || (
+        !activeDomainJob
+        && !activeLegacyJob
+        && !activeLandingJob
+      )
     ) {
       return;
     }
@@ -349,90 +655,268 @@ export default function ArgosPage() {
   }, [
     operation,
     activeDomainJob,
+    activeLegacyJob,
+    activeLandingJob,
     refreshOperation,
   ]);
 
 
-  async function startOperation() {
-    const normalized =
-      companyName.trim();
-
+  useEffect(() => {
     if (
-      normalized.length < 2
-      || creatingOperation
+      !operation
+      || !activeMetaLoginJob
     ) {
       return;
     }
 
-    setCreatingOperation(true);
+    const timer =
+      window.setInterval(
+        () => {
+          refreshOperation(
+            operation.id,
+          ).catch((error) => {
+            setUiError(
+              getErrorMessage(
+                error,
+              ),
+            );
+          });
+        },
+        2000,
+      );
+
+    return () => {
+      window.clearInterval(
+        timer,
+      );
+    };
+  }, [
+    operation,
+    activeMetaLoginJob,
+    refreshOperation,
+  ]);
+
+
+  function resetForNewCompany() {
+    setOperation(null);
+    setIntake(null);
+    setCompanyData(null);
+    setJobs([]);
+    setSelectedDomain("");
+    setUiError(null);
+  }
+
+
+  async function handleCnpjUpload(
+    file: File,
+  ) {
+    if (uploadingCnpj) {
+      return;
+    }
+
+    setUploadingCnpj(true);
     setUiError(null);
 
     try {
-      const created =
-        await createArgosOperation(
-          normalized,
+      const createdIntake =
+        await uploadArgosCnpjCard(
+          file,
         );
 
-      setOperation(created);
-      setCompanyName(
-        created.company_name,
+      setIntake(
+        createdIntake,
       );
-      setJobs([]);
 
-      setSelectedDomain(
-        created.domain_candidates[0]
-        ?? "",
+      setCompanyData(
+        normalizeCompanyData(
+          createdIntake.extracted_data,
+        ),
       );
     } catch (error) {
       setUiError(
         getErrorMessage(error),
       );
     } finally {
-      setCreatingOperation(false);
+      setUploadingCnpj(false);
     }
   }
 
 
-  async function queueDomainPurchase() {
+  function updateCompanyData(
+    field: keyof ArgosCompanyData,
+    value: string,
+  ) {
+    setCompanyData(
+      (current) => {
+        if (!current) {
+          return current;
+        }
+
+        return {
+          ...current,
+          [field]: value,
+        };
+      },
+    );
+  }
+
+
+  async function confirmCompany() {
+    if (
+      !intake
+      || !companyData
+      || confirmingCnpj
+    ) {
+      return;
+    }
+
+    setConfirmingCnpj(true);
+    setUiError(null);
+
+    try {
+      const createdOperation =
+        await confirmArgosCnpjIntake(
+          intake.id,
+          companyData,
+        );
+
+      await refreshOperation(
+        createdOperation.id,
+      );
+    } catch (error) {
+      setUiError(
+        getErrorMessage(error),
+      );
+    } finally {
+      setConfirmingCnpj(false);
+    }
+  }
+
+
+  async function decideLegacy(
+    decision: "confirm" | "reject",
+  ) {
     if (
       !operation
-      || queuingDomain
-      || operation.domain
+      || decidingLegacy
     ) {
       return;
     }
 
-    const selected =
-      selectedDomain.trim().toLowerCase();
+    setDecidingLegacy(true);
+    setUiError(null);
 
-    if (!selected) {
-      setUiError(
-        "Selecione o domínio que deseja comprar.",
+    try {
+      await decideArgosLegacyReconciliation(
+        operation.id,
+        decision,
       );
-      return;
-    }
 
+      await refreshOperation(
+        operation.id,
+      );
+    } catch (error) {
+      setUiError(
+        getErrorMessage(error),
+      );
+    } finally {
+      setDecidingLegacy(false);
+    }
+  }
+
+
+  async function retryLegacy() {
     if (
-      !operation.domain_candidates.includes(
-        selected,
-      )
+      !operation
+      || decidingLegacy
+      || activeLegacyJob
     ) {
-      setUiError(
-        "O domínio selecionado não pertence "
-        + "aos candidatos autorizados.",
-      );
       return;
     }
 
-    setQueuingDomain(true);
+    setDecidingLegacy(true);
     setUiError(null);
 
     try {
       await createArgosJob(
         operation.id,
-        "BUY_DOMAIN",
-        selected,
+        "RECONCILE_LEGACY",
       );
+
+      await refreshOperation(
+        operation.id,
+      );
+    } catch (error) {
+      setUiError(
+        getErrorMessage(error),
+      );
+    } finally {
+      setDecidingLegacy(false);
+    }
+  }
+
+
+  async function queueDomainStep() {
+    if (
+      !operation
+      || queuingDomain
+      || operation.domain
+      || legacyBlocksDomain
+    ) {
+      return;
+    }
+
+    const poolRootRequired =
+      latestDomainJob?.action
+        === "ALLOCATE_SUBDOMAIN"
+      && latestDomainJob.status
+        === "failed"
+      && Boolean(
+        latestDomainJob.error?.includes(
+          "DOMAIN_POOL_ROOT_REQUIRED",
+        ),
+      );
+
+    setQueuingDomain(true);
+    setUiError(null);
+
+    try {
+      if (!poolRootRequired) {
+        await createArgosJob(
+          operation.id,
+          "ALLOCATE_SUBDOMAIN",
+        );
+      } else {
+        const selected =
+          selectedDomain
+            .trim()
+            .toLowerCase();
+
+        if (!selected) {
+          setUiError(
+            "Selecione o próximo domínio raiz.",
+          );
+          return;
+        }
+
+        if (
+          !operation.domain_candidates.includes(
+            selected,
+          )
+        ) {
+          setUiError(
+            "O domínio raiz selecionado não "
+            + "pertence aos candidatos autorizados.",
+          );
+          return;
+        }
+
+        await createArgosJob(
+          operation.id,
+          "BUY_DOMAIN",
+          selected,
+        );
+      }
 
       await refreshOperation(
         operation.id,
@@ -447,6 +931,244 @@ export default function ArgosPage() {
   }
 
 
+  async function queueLandingPage() {
+    if (
+      !operation
+      || queuingLanding
+      || activeLandingJob
+      || !operation.domain
+      || operation.site_url
+      || legacyBlocksDomain
+    ) {
+      return;
+    }
+
+    setQueuingLanding(true);
+    setUiError(null);
+
+    try {
+      await createArgosJob(
+        operation.id,
+        "CREATE_LANDING_PAGE",
+      );
+
+      await refreshOperation(
+        operation.id,
+      );
+    } catch (error) {
+      setUiError(
+        getErrorMessage(error),
+      );
+    } finally {
+      setQueuingLanding(false);
+    }
+  }
+
+
+  async function queueMetaLogin() {
+    if (
+      !operation
+      || queuingMetaLogin
+      || activeMetaLoginJob
+      || operation.current_step
+        === "META_LOGGED_IN"
+    ) {
+      return;
+    }
+
+    if (
+      operation.current_step
+        !== "LANDING_CREATED"
+      || !operation.site_url
+    ) {
+      setUiError(
+        "A landing page precisa estar "
+        + "concluída antes do Login Meta.",
+      );
+      return;
+    }
+
+    setQueuingMetaLogin(true);
+    setUiError(null);
+
+    try {
+      await createArgosJob(
+        operation.id,
+        "LOGIN_META",
+      );
+
+      await refreshOperation(
+        operation.id,
+      );
+    } catch (error) {
+      setUiError(
+        getErrorMessage(error),
+      );
+    } finally {
+      setQueuingMetaLogin(false);
+    }
+  }
+
+
+  async function queueMetaDomain() {
+    if (
+      !operation
+      || queuingMetaDomain
+      || activeMetaDomainJob
+      || operation.current_step
+        === "META_DOMAIN_VERIFIED"
+      || operation.current_step
+        === "DOMAIN_VERIFIED"
+    ) {
+      return;
+    }
+
+    if (
+      operation.current_step
+        !== "BUSINESS_CREATED"
+      || !operation.business_id
+      || !operation.domain
+      || !operation.site_url
+    ) {
+      setUiError(
+        "O Business Portfolio, domínio e "
+        + "landing page precisam estar "
+        + "concluídos antes de conectar "
+        + "o domínio à Meta.",
+      );
+      return;
+    }
+
+    setQueuingMetaDomain(true);
+    setUiError(null);
+
+    try {
+      await createArgosJob(
+        operation.id,
+        "META_DOMAIN",
+      );
+
+      await refreshOperation(
+        operation.id,
+      );
+    } catch (error) {
+      setUiError(
+        getErrorMessage(error),
+      );
+    } finally {
+      setQueuingMetaDomain(false);
+    }
+  }
+
+
+  useEffect(() => {
+    if (
+      !operation
+      || !activeMetaDomainJob
+    ) {
+      return;
+    }
+
+    const timer = window.setInterval(
+      () => {
+        void refreshOperation(
+          operation.id,
+        );
+      },
+      1500,
+    );
+
+    return () => {
+      window.clearInterval(
+        timer,
+      );
+    };
+  }, [
+    activeMetaDomainJob,
+    operation,
+    refreshOperation,
+  ]);
+
+
+  async function queueBusinessInfo() {
+    if (
+      !operation
+      || queuingBusinessInfo
+      || activeBusinessInfoJob
+      || operation.current_step
+        === "BUSINESS_INFO_COMPLETE"
+    ) {
+      return;
+    }
+
+    if (
+      (
+        operation.current_step
+          !== "META_DOMAIN_VERIFIED"
+        && operation.current_step
+          !== "DOMAIN_VERIFIED"
+      )
+      || !operation.business_id
+    ) {
+      setUiError(
+        "O domínio precisa estar "
+        + "verificado na Meta antes "
+        + "do Business Info.",
+      );
+      return;
+    }
+
+    setQueuingBusinessInfo(true);
+    setUiError(null);
+
+    try {
+      await createArgosJob(
+        operation.id,
+        "BUSINESS_INFO",
+      );
+
+      await refreshOperation(
+        operation.id,
+      );
+    } catch (error) {
+      setUiError(
+        getErrorMessage(error),
+      );
+    } finally {
+      setQueuingBusinessInfo(false);
+    }
+  }
+
+
+  useEffect(() => {
+    if (
+      !operation
+      || !activeBusinessInfoJob
+    ) {
+      return;
+    }
+
+    const timer = window.setInterval(
+      () => {
+        void refreshOperation(
+          operation.id,
+        );
+      },
+      1500,
+    );
+
+    return () => {
+      window.clearInterval(
+        timer,
+      );
+    };
+  }, [
+    activeBusinessInfoJob,
+    operation,
+    refreshOperation,
+  ]);
+
+
   function domainStatus():
     ArgosStepStatus {
     if (!operation) {
@@ -459,6 +1181,10 @@ export default function ArgosPage() {
       || operation.domain
     ) {
       return "done";
+    }
+
+    if (legacyBlocksDomain) {
+      return "locked";
     }
 
     if (
@@ -487,11 +1213,251 @@ export default function ArgosPage() {
   }
 
 
+  function landingStatus():
+    ArgosStepStatus {
+    if (
+      !operation
+      || !operation.domain
+      || legacyBlocksDomain
+    ) {
+      return "locked";
+    }
+
+    if (
+      operation.site_url
+      || operation.current_step
+        === "LANDING_CREATED"
+    ) {
+      return "done";
+    }
+
+    if (
+      activeLandingJob
+      || queuingLanding
+    ) {
+      return "running";
+    }
+
+    if (
+      latestLandingJob?.status
+        === "failed"
+    ) {
+      return "error";
+    }
+
+    return "ready";
+  }
+
+
+  function metaLoginStatus():
+    ArgosStepStatus {
+    if (!operation) {
+      return "locked";
+    }
+
+    if (
+      latestMetaLoginJob?.status
+        === "succeeded"
+      || operation.current_step
+        === "META_LOGGED_IN"
+      || operation.current_step
+        === "BUSINESS_CREATED"
+      || Boolean(operation.business_id)
+    ) {
+      return "done";
+    }
+
+    if (
+      activeMetaLoginJob
+      || queuingMetaLogin
+    ) {
+      return "running";
+    }
+
+    if (
+      latestMetaLoginJob?.status
+        === "failed"
+    ) {
+      return "error";
+    }
+
+    if (
+      operation.current_step
+        !== "LANDING_CREATED"
+      || !operation.site_url
+    ) {
+      return "locked";
+    }
+
+    return "ready";
+  }
+
+
+  function businessStatus():
+    ArgosStepStatus {
+    if (!operation) {
+      return "locked";
+    }
+
+    if (operation.business_id) {
+      return "done";
+    }
+
+    if (
+      metaLoginStatus()
+      === "done"
+    ) {
+      return "ready";
+    }
+
+    return "locked";
+  }
+
+
+  function metaDomainStatus():
+    ArgosStepStatus {
+    if (!operation) {
+      return "locked";
+    }
+
+    if (
+      operation.current_step
+        === "META_DOMAIN_VERIFIED"
+      || operation.current_step
+        === "DOMAIN_VERIFIED"
+    ) {
+      return "done";
+    }
+
+    if (!operation.business_id) {
+      return "locked";
+    }
+
+    return "ready";
+  }
+
+
+  function businessInfoStatus():
+    ArgosStepStatus {
+    if (!operation) {
+      return "locked";
+    }
+
+    if (
+      operation.current_step
+        === "BUSINESS_INFO_COMPLETE"
+      || operation.current_step
+        === "BUSINESS_VERIFICATION_REVIEW"
+      || operation.current_step
+        === "BUSINESS_VERIFIED"
+      || operation.current_step
+        === "HARDT_ADMIN_ACCESS_PENDING"
+      || operation.current_step
+        === "HARDT_ADMIN_ACCESS_INVITED"
+      || operation.current_step
+        === "HARDT_ADMIN_ACCESS_COMPLETE"
+    ) {
+      return "done";
+    }
+
+    if (
+      activeBusinessInfoJob
+      || queuingBusinessInfo
+    ) {
+      return "running";
+    }
+
+    if (
+      latestBusinessInfoJob?.status
+        === "failed"
+    ) {
+      return "error";
+    }
+
+    if (
+      operation.current_step
+        === "META_DOMAIN_VERIFIED"
+      || operation.current_step
+        === "DOMAIN_VERIFIED"
+    ) {
+      return "ready";
+    }
+
+    return "locked";
+  }
+
+
+  function documentsStatus():
+    ArgosStepStatus {
+    if (!operation) {
+      return "locked";
+    }
+
+    if (
+      operation.current_step
+        === "BUSINESS_VERIFICATION_REVIEW"
+      || operation.current_step
+        === "BUSINESS_VERIFIED"
+      || operation.current_step
+        === "HARDT_ADMIN_ACCESS_PENDING"
+      || operation.current_step
+        === "HARDT_ADMIN_ACCESS_INVITED"
+      || operation.current_step
+        === "HARDT_ADMIN_ACCESS_COMPLETE"
+    ) {
+      return "done";
+    }
+
+    if (
+      operation.current_step
+        === "BUSINESS_INFO_COMPLETE"
+    ) {
+      return "ready";
+    }
+
+    return "locked";
+  }
+
+
   function statusForStep(
     stepId: string,
   ): ArgosStepStatus {
     if (stepId === "domain") {
       return domainStatus();
+    }
+
+    if (stepId === "landing") {
+      return landingStatus();
+    }
+
+    if (
+      stepId === "meta_login"
+    ) {
+      return metaLoginStatus();
+    }
+
+    if (
+      stepId === "business"
+    ) {
+      return businessStatus();
+    }
+
+    if (
+      stepId === "meta_domain"
+    ) {
+      return metaDomainStatus();
+    }
+
+    if (
+      stepId === "business_info"
+    ) {
+      return businessInfoStatus();
+    }
+
+    if (
+      stepId === "documents"
+    ) {
+      return documentsStatus();
     }
 
     return "locked";
@@ -501,17 +1467,261 @@ export default function ArgosPage() {
   function detailForStep(
     stepId: string,
   ): string | undefined {
-    if (stepId !== "domain") {
-      return undefined;
-    }
-
     if (!operation) {
       return undefined;
     }
 
+
+    if (
+      stepId === "meta_login"
+    ) {
+      if (
+        latestMetaLoginJob?.status
+          === "succeeded"
+        || operation.current_step
+          === "META_LOGGED_IN"
+        || operation.current_step
+          === "BUSINESS_CREATED"
+        || Boolean(operation.business_id)
+      ) {
+        return "Sessão Meta autenticada.";
+      }
+
+      if (
+        activeMetaLoginJob?.status
+          === "queued"
+      ) {
+        return (
+          "LOGIN_META está na fila. "
+          + "Aguardando Argos Agent."
+        );
+      }
+
+      if (
+        activeMetaLoginJob?.status
+          === "running"
+      ) {
+        return (
+          "Argos Agent está autenticando "
+          + "o perfil Meta reservado."
+        );
+      }
+
+      if (
+        latestMetaLoginJob?.status
+          === "failed"
+      ) {
+        return (
+          latestMetaLoginJob.error
+          || "O Login Meta falhou."
+        );
+      }
+
+      if (
+        operation.current_step
+          !== "LANDING_CREATED"
+      ) {
+        return (
+          "Aguardando conclusão "
+          + "da landing page."
+        );
+      }
+
+      return (
+        "Perfil Meta será reservado "
+        + "automaticamente pelo Argos."
+      );
+    }
+
+    if (stepId === "landing") {
+      if (operation.site_url) {
+        return (
+          "Landing publicada: "
+          + operation.site_url
+        );
+      }
+
+      if (!operation.domain) {
+        return (
+          "Aguardando conclusão do domínio."
+        );
+      }
+
+      if (
+        activeLandingJob?.status
+          === "queued"
+      ) {
+        return (
+          "CREATE_LANDING_PAGE está na fila. "
+          + "Aguardando Argos Agent."
+        );
+      }
+
+      if (
+        activeLandingJob?.status
+          === "running"
+      ) {
+        return (
+          "Argos Agent está publicando "
+          + "a landing pelo motor existente."
+        );
+      }
+
+      if (
+        latestLandingJob?.status
+          === "failed"
+      ) {
+        return (
+          latestLandingJob.error
+          || "A publicação da landing falhou."
+        );
+      }
+
+      return (
+        "Pronto para publicar em https://"
+        + operation.domain
+        + "."
+      );
+    }
+
+    if (stepId !== "domain") {
+      if (
+      stepId === "business"
+    ) {
+      if (operation.business_id) {
+        return (
+          "Business Portfolio criado. "
+          + "Business ID: "
+          + operation.business_id
+        );
+      }
+
+      return (
+        "Aguardando conclusão "
+        + "do Login Meta."
+      );
+    }
+
+
+    if (
+      stepId === "meta_domain"
+    ) {
+      if (!operation.business_id) {
+        return (
+          "Aguardando criação "
+          + "do Business Portfolio."
+        );
+      }
+
+      return (
+        "Business ID "
+        + operation.business_id
+        + " pronto para conectar "
+        + "o domínio à Meta."
+      );
+    }
+
+
+    if (
+      stepId === "business_info"
+    ) {
+      if (
+        operation.current_step
+          === "BUSINESS_INFO_COMPLETE"
+        || operation.current_step
+          === "BUSINESS_VERIFICATION_REVIEW"
+        || operation.current_step
+          === "BUSINESS_VERIFIED"
+        || operation.current_step
+          === "HARDT_ADMIN_ACCESS_PENDING"
+        || operation.current_step
+          === "HARDT_ADMIN_ACCESS_INVITED"
+        || operation.current_step
+          === "HARDT_ADMIN_ACCESS_COMPLETE"
+      ) {
+        return (
+          "Business Info preenchido "
+          + "e confirmado na Meta."
+        );
+      }
+
+      if (
+        activeBusinessInfoJob?.status
+          === "queued"
+      ) {
+        return (
+          "BUSINESS_INFO está na fila. "
+          + "Aguardando Argos Agent."
+        );
+      }
+
+      if (
+        activeBusinessInfoJob?.status
+          === "running"
+      ) {
+        return (
+          "Argos Agent está preenchendo "
+          + "o Business Info."
+        );
+      }
+
+      if (
+        latestBusinessInfoJob?.status
+          === "failed"
+      ) {
+        return (
+          latestBusinessInfoJob.error
+          || "Falha ao preencher Business Info."
+        );
+      }
+
+      if (
+        operation.current_step
+          === "META_DOMAIN_VERIFIED"
+        || operation.current_step
+          === "DOMAIN_VERIFIED"
+      ) {
+        return (
+          "Domínio Meta verificado. "
+          + "Business ID "
+          + operation.business_id
+          + " pronto para Business Info."
+        );
+      }
+
+      return (
+        "Aguardando verificação "
+        + "do domínio na Meta."
+      );
+    }
+
+
+    if (
+      stepId === "documents"
+    ) {
+      if (
+        operation.current_step
+          === "BUSINESS_INFO_COMPLETE"
+      ) {
+        return (
+          "Business Info concluído. "
+          + "Documentação liberada."
+        );
+      }
+
+      return (
+        "Aguardando conclusão "
+        + "do Business Info."
+      );
+    }
+
+
+    return undefined;
+    }
+
     if (operation.domain) {
       return (
-        `Domínio confirmado: `
+        "Domínio confirmado: "
         + operation.domain
       );
     }
@@ -521,7 +1731,7 @@ export default function ArgosPage() {
         === "queued"
     ) {
       return (
-        "Comando BUY_DOMAIN está na fila. "
+        "Provisionamento do endereço web está na fila. "
         + "Aguardando Argos Agent."
       );
     }
@@ -734,44 +1944,42 @@ export default function ArgosPage() {
         )}
 
 
-        <CompanyHeader
-          companyName={companyName}
-          onCompanyNameChange={
-            setCompanyName
-          }
-          operationStarted={
-            Boolean(operation)
-          }
-          onStart={
-            startOperation
-          }
-        />
+        {!operation && (
+          <CnpjIntakeCard
+            intake={intake}
+            companyData={companyData}
+            uploading={uploadingCnpj}
+            confirming={confirmingCnpj}
+            onFileSelected={
+              handleCnpjUpload
+            }
+            onCompanyDataChange={
+              updateCompanyData
+            }
+            onConfirm={
+              confirmCompany
+            }
+          />
+        )}
+
 
         {operation && (
           <div className="mt-3 flex justify-end">
             <button
               type="button"
               disabled={
-                Boolean(activeDomainJob)
+                Boolean(
+                  activeDomainJob
+                  || activeLegacyJob
+                )
               }
-              onClick={() => {
-                setOperation(null);
-                setCompanyName("");
-                setJobs([]);
-                setSelectedDomain("");
-                setUiError(null);
-              }}
+              onClick={
+                resetForNewCompany
+              }
               className="rounded-lg border border-white/10 bg-white/[0.04] px-4 py-2 text-xs font-medium text-zinc-400 transition hover:bg-white/[0.08] hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
             >
-              Nova operação
+              Nova empresa
             </button>
-          </div>
-        )}
-
-
-        {creatingOperation && (
-          <div className="mt-3 text-sm text-zinc-500">
-            Criando operação...
           </div>
         )}
 
@@ -832,6 +2040,17 @@ export default function ArgosPage() {
         )}
 
 
+        {operation && (
+          <LegacyReconciliationCard
+            operation={operation}
+            job={latestLegacyJob}
+            deciding={decidingLegacy}
+            onDecision={decideLegacy}
+            onRetry={retryLegacy}
+          />
+        )}
+
+
         <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
 
           <section className="space-y-3">
@@ -871,6 +2090,7 @@ export default function ArgosPage() {
                       isDomain
                       && operation
                       && !operation.domain
+                      && !legacyBlocksDomain
                       && (
                         <div className="rounded-2xl border border-violet-500/15 bg-violet-500/[0.04] p-5">
                           <div className="text-sm font-semibold text-white">
@@ -972,9 +2192,21 @@ export default function ArgosPage() {
                         )
                       }
                       onAction={
-                        isDomain
-                          ? queueDomainPurchase
-                          : undefined
+                        step.id === "meta_login"
+                          ? queueMetaLogin
+                          : step.id === "meta_domain"
+                            ? queueMetaDomain
+                            : step.id === "business_info"
+                              ? queueBusinessInfo
+                              : (
+                            isDomain
+                                                      ? queueDomainStep
+                                                      : (
+                                                        step.id === "landing"
+                                                          ? queueLandingPage
+                                                          : undefined
+                                                      )
+                          )
                       }
                     />
                   </div>

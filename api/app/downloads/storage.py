@@ -31,3 +31,32 @@ def generate_download_url(
         },
         ExpiresIn=settings.r2_presigned_expire_seconds,
     )
+
+
+
+def upload_private_object(
+    object_key: str,
+    *,
+    content: bytes,
+    content_type: str,
+) -> None:
+    client = get_r2_client()
+
+    client.put_object(
+        Bucket=settings.r2_bucket_name,
+        Key=object_key,
+        Body=content,
+        ContentType=content_type,
+        CacheControl="private, no-store",
+    )
+
+
+def delete_private_object(
+    object_key: str,
+) -> None:
+    client = get_r2_client()
+
+    client.delete_object(
+        Bucket=settings.r2_bucket_name,
+        Key=object_key,
+    )
