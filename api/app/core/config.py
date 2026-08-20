@@ -35,6 +35,14 @@ class Settings(BaseSettings):
     r2_bucket_name: str = ""
     r2_endpoint_url: str = ""
     r2_presigned_expire_seconds: int = 300
+
+    # Argos Sites — R2 dedicado ao hosting
+    argos_sites_r2_endpoint_url: str = ""
+    argos_sites_r2_access_key_id: str = ""
+    argos_sites_r2_secret_access_key: str = ""
+    argos_sites_r2_bucket: str = ""
+    argos_sites_r2_presigned_expire_seconds: int = 300
+
     app_name: str = "Hardt Systems API"
     app_version: str = "1.0.0"
     debug: bool = True

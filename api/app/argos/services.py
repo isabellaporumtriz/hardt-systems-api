@@ -25,6 +25,11 @@ from app.argos.models import (
     ArgosOperation,
 )
 
+from app.argos.sites_storage import (
+    site_object_key,
+    verify_site_index_upload,
+)
+
 
 ACTION_BUY_DOMAIN = "BUY_DOMAIN"
 
@@ -1010,6 +1015,127 @@ def complete_job(
         raise RuntimeError(
             "JOB_WORKER_MISMATCH"
         )
+
+    # --------------------------------------------------
+    # CREATE_LANDING_PAGE:
+    # fail-closed antes de marcar o job succeeded.
+    #
+    # Não basta o Agent afirmar que fez upload.
+    # O servidor confirma no R2 que o index.html
+    # pertence exatamente a este job/operação.
+    # --------------------------------------------------
+
+    if (
+        job.action
+        == ACTION_CREATE_LANDING_PAGE
+    ):
+        operation_for_storage = db.get(
+            ArgosOperation,
+            job.operation_id,
+        )
+
+        if operation_for_storage is None:
+            raise RuntimeError(
+                "LANDING_OPERATION_NOT_FOUND"
+            )
+
+        expected_hostname = str(
+            operation_for_storage.domain
+            or ""
+        ).strip().lower().rstrip(".")
+
+        if not expected_hostname:
+            raise RuntimeError(
+                "SITE_UPLOAD_DOMAIN_REQUIRED"
+            )
+
+        site_storage = result.get(
+            "site_storage"
+        )
+
+        if not isinstance(
+            site_storage,
+            dict,
+        ):
+            raise RuntimeError(
+                "SITE_UPLOAD_EVIDENCE_MISSING"
+            )
+
+        if (
+            site_storage.get(
+                "uploaded"
+            )
+            is not True
+        ):
+            raise RuntimeError(
+                "SITE_UPLOAD_NOT_CONFIRMED_BY_AGENT"
+            )
+
+        supplied_hostname = str(
+            site_storage.get(
+                "hostname"
+            )
+            or ""
+        ).strip().lower().rstrip(".")
+
+        if (
+            supplied_hostname
+            != expected_hostname
+        ):
+            raise RuntimeError(
+                "SITE_UPLOAD_HOSTNAME_MISMATCH"
+            )
+
+        expected_index_key = (
+            site_object_key(
+                hostname=(
+                    expected_hostname
+                ),
+                relative_path=(
+                    "index.html"
+                ),
+            )
+        )
+
+        supplied_index_key = str(
+            site_storage.get(
+                "index_object_key"
+            )
+            or ""
+        ).strip()
+
+        if (
+            supplied_index_key
+            != expected_index_key
+        ):
+            raise RuntimeError(
+                "SITE_UPLOAD_INDEX_KEY_MISMATCH"
+            )
+
+        verified_storage = (
+            verify_site_index_upload(
+                hostname=(
+                    expected_hostname
+                ),
+                job_id=str(
+                    job.id
+                ),
+                operation_id=str(
+                    job.operation_id
+                ),
+            )
+        )
+
+        result = dict(
+            result
+        )
+
+        result[
+            "site_storage"
+        ] = {
+            **site_storage,
+            **verified_storage,
+        }
 
     job.status = "succeeded"
     job.result = result
