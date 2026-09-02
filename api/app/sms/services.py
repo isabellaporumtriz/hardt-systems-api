@@ -661,7 +661,7 @@ def list_activations(
     *,
     user_id: UUID,
 ) -> list[SMSActivation]:
-    return list(
+    activations = list(
         db.scalars(
             select(SMSActivation)
             .where(
@@ -673,6 +673,69 @@ def list_activations(
             )
         ).all()
     )
+
+    reconcilable_statuses = {
+        "waiting",
+    }
+
+    now = datetime.now(timezone.utc)
+    reconciled_any = False
+
+    # Reconcilia somente ativações ainda pendentes e já
+    # vencidas quando o usuário volta ao painel.
+    # Ativações que receberam código não são alteradas
+    # automaticamente por esse caminho.
+    for activation in activations:
+        if activation.status not in reconcilable_statuses:
+            continue
+
+        if not activation.provider_activation_id:
+            continue
+
+        expires_at = activation.expires_at
+        if expires_at is None:
+            continue
+
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(
+                tzinfo=timezone.utc
+            )
+
+        if expires_at > now:
+            continue
+
+        try:
+            reconciled = sync_activation(
+                db,
+                user_id=user_id,
+                activation_id=activation.id,
+            )
+
+            # Uma ativação que já ultrapassou expires_at e
+            # não recebeu SMS expirou para o cliente, mesmo
+            # quando o provider representa esse fechamento
+            # como STATUS_CANCEL.
+            if (
+                reconciled.status == "cancelled"
+                and not reconciled.sms_code
+            ):
+                reconciled.status = "expired"
+                db.add(reconciled)
+                db.flush()
+
+            reconciled_any = True
+        except SMS24hProviderError:
+            # Provider temporariamente indisponível:
+            # não impedir o usuário de abrir o painel.
+            continue
+
+    if reconciled_any:
+        db.commit()
+
+        for activation in activations:
+            db.refresh(activation)
+
+    return activations
 
 
 def sync_activation(
