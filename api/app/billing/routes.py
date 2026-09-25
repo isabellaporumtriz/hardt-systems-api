@@ -19,6 +19,7 @@ from app.billing.schemas import (
 from app.billing.services import (
     create_monthly_checkout,
     create_one_time_checkout,
+    get_pending_one_time_checkout,
 )
 from app.core.database import get_db
 from app.users.models import User
@@ -28,6 +29,21 @@ router = APIRouter(
     prefix="/billing",
     tags=["Billing"],
 )
+
+
+@router.post(
+    "/checkout/resume/hardt-meet",
+    response_model=OneTimeCheckoutResponse,
+)
+async def resume_hardt_meet_checkout(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> OneTimeCheckoutResponse:
+    return await get_pending_one_time_checkout(
+        db,
+        current_user,
+        "hardt-meet",
+    )
 
 
 @router.post(

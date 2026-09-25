@@ -71,6 +71,21 @@ export async function createOneTimeCheckout(
     await api.post<OneTimeCheckoutResponse>(
       "/billing/checkout",
       payload,
+      { timeout: 30000 },
+    );
+
+  return response.data;
+}
+
+
+export async function resumeHardtMeetCheckout(): Promise<
+  OneTimeCheckoutResponse
+> {
+  const response =
+    await api.post<OneTimeCheckoutResponse>(
+      "/billing/checkout/resume/hardt-meet",
+      undefined,
+      { timeout: 30000 },
     );
 
   return response.data;

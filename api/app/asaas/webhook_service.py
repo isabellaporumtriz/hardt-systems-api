@@ -100,6 +100,70 @@ def get_or_create_charge(
     if existing is not None:
         return existing
 
+    # Exclusivo do checkout avulso Hardt Meet.
+    #
+    # O Asaas pode entregar o webhook antes de a resposta
+    # do POST /payments voltar e antes de asaas_payment_id
+    # ser persistido localmente.
+    external_reference = payment.get(
+        "externalReference"
+    )
+
+    if (
+        isinstance(external_reference, str)
+        and external_reference.startswith(
+            "hardt-meet:"
+        )
+    ):
+        hardt_meet_charge = db.scalar(
+            select(Charge).where(
+                Charge.external_reference
+                == external_reference
+            )
+        )
+
+        if hardt_meet_charge is not None:
+            current_payment_id = (
+                hardt_meet_charge.asaas_payment_id
+            )
+
+            if (
+                current_payment_id
+                and str(current_payment_id)
+                != str(payment_id)
+            ):
+                raise ValueError(
+                    "A externalReference do Hardt Meet "
+                    "já está vinculada a outro pagamento."
+                )
+
+            hardt_meet_charge.asaas_payment_id = str(
+                payment_id
+            )
+
+            billing_type = payment.get(
+                "billingType"
+            )
+
+            if billing_type:
+                hardt_meet_charge.payment_method = str(
+                    billing_type
+                )
+
+            invoice_url = payment.get(
+                "invoiceUrl"
+            )
+
+            if invoice_url:
+                hardt_meet_charge.invoice_url = str(
+                    invoice_url
+                )
+
+            db.add(hardt_meet_charge)
+            db.flush()
+
+            return hardt_meet_charge
+
     payment_link_id = payment.get(
         "paymentLink"
     )
@@ -368,6 +432,111 @@ def issue_or_renew_license(
     return existing_license
 
 
+def _is_hardt_meet_charge(
+    charge: Charge,
+) -> bool:
+    return (
+        isinstance(
+            charge.external_reference,
+            str,
+        )
+        and charge.external_reference.startswith(
+            "hardt-meet:"
+        )
+    )
+
+
+def _process_hardt_meet_paid_event(
+    db: Session,
+    charge: Charge,
+    payment: dict[str, Any],
+) -> dict[str, Any]:
+    """
+    Hardening exclusivo da compra avulsa Hardt Meet.
+
+    Todos os demais produtos continuam no fluxo legado.
+    """
+
+    locked_charge = db.scalar(
+        select(Charge)
+        .where(
+            Charge.id == charge.id
+        )
+        .with_for_update()
+        .execution_options(
+            populate_existing=True
+        )
+    )
+
+    if locked_charge is None:
+        raise RuntimeError(
+            "Cobrança Hardt Meet desapareceu durante "
+            "o processamento do webhook."
+        )
+
+    charge = locked_charge
+
+    payment_value = payment.get("value")
+
+    if payment_value is None:
+        raise ValueError(
+            "Evento pago do Hardt Meet não informou value."
+        )
+
+    incoming_amount = Decimal(
+        str(payment_value)
+    )
+
+    local_amount = Decimal(
+        charge.amount
+    )
+
+    if incoming_amount != local_amount:
+        raise ValueError(
+            "Valor recebido no webhook Hardt Meet "
+            "diverge da cobrança local: "
+            f"{incoming_amount} != {local_amount}."
+        )
+
+    already_paid = (
+        charge.status == "paid"
+        and charge.license_id is not None
+    )
+
+    if already_paid:
+        # O commit do wrapper do webhook libera o lock.
+        return {
+            "paid": True,
+            "already_processed": True,
+            "license_id": str(
+                charge.license_id
+            ),
+        }
+
+    charge.status = "paid"
+
+    if charge.paid_at is None:
+        charge.paid_at = utc_now()
+
+    db.add(charge)
+
+    # Sem commit intermediário:
+    # Charge + License são finalizados juntos pelo issuer,
+    # mantendo o FOR UPDATE durante a decisão.
+    license_record = issue_or_renew_license(
+        db,
+        charge,
+    )
+
+    return {
+        "paid": True,
+        "license_id": str(
+            license_record.id
+        ),
+    }
+
+
+
 def process_payment_event(
     db: Session,
     event_type: str,
@@ -395,6 +564,16 @@ def process_payment_event(
                 "assinatura local conhecida."
             ),
         }
+
+    if (
+        event_type in PAID_EVENTS
+        and _is_hardt_meet_charge(charge)
+    ):
+        return _process_hardt_meet_paid_event(
+            db,
+            charge,
+            payment,
+        )
 
     if event_type in PAID_EVENTS:
         already_paid = (
@@ -483,7 +662,6 @@ def process_payment_event(
             f"Evento {event_type} não exige ação."
         ),
     }
-
 
 def process_webhook(
     db: Session,

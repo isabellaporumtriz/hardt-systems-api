@@ -8,6 +8,7 @@ from datetime import (
     timezone,
 )
 from decimal import Decimal, ROUND_HALF_UP
+from zoneinfo import ZoneInfo
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -255,6 +256,221 @@ async def ensure_asaas_customer(
     db.refresh(user)
 
     return str(customer_id)
+
+
+async def _find_hardt_meet_asaas_customer_by_external_reference(
+    user: User,
+) -> str | None:
+    result = await asaas_client.get(
+        "/customers",
+        params={
+            "externalReference": str(user.id),
+            "limit": 10,
+            "offset": 0,
+        },
+    )
+
+    rows = result.get("data") or []
+
+    if len(rows) > 1:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=(
+                "Mais de um cliente Asaas foi encontrado "
+                "para o mesmo usuário. "
+                "O checkout foi interrompido para evitar "
+                "duplicidade."
+            ),
+        )
+
+    if not rows:
+        return None
+
+    customer_id = rows[0].get("id")
+
+    if not customer_id:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=(
+                "O Asaas retornou um cliente sem ID."
+            ),
+        )
+
+    return str(customer_id)
+
+
+def _persist_hardt_meet_asaas_customer_id(
+    db: Session,
+    user: User,
+    customer_id: str,
+) -> str:
+    user.asaas_customer_id = str(
+        customer_id
+    )
+
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    return str(customer_id)
+
+
+async def ensure_hardt_meet_asaas_customer(
+    db: Session,
+    user: User,
+    *,
+    cpf_cnpj: str,
+    mobile_phone: str,
+) -> str:
+    if user.asaas_customer_id:
+        return user.asaas_customer_id
+
+    # Antes de qualquer criação, reconcilia pelo identificador
+    # canônico do usuário. Isso também recupera uma tentativa
+    # anterior cujo POST tenha sido processado pelo Asaas mas
+    # cuja resposta não tenha chegado à aplicação.
+    try:
+        existing_customer_id = (
+            await _find_hardt_meet_asaas_customer_by_external_reference(
+                user
+            )
+        )
+
+    except AsaasError as exc:
+        raise HTTPException(
+            status_code=(
+                exc.status_code
+                or status.HTTP_502_BAD_GATEWAY
+            ),
+            detail={
+                "message": (
+                    "Não foi possível verificar o "
+                    "cadastro de pagamento no Asaas."
+                ),
+                "asaas": exc.response_data,
+            },
+        ) from exc
+
+    if existing_customer_id:
+        return _persist_hardt_meet_asaas_customer_id(
+            db,
+            user,
+            existing_customer_id,
+        )
+
+    try:
+        result = await asaas_client.post(
+            "/customers",
+            json={
+                "name": user.name,
+                "email": user.email,
+                "cpfCnpj": cpf_cnpj,
+                "mobilePhone": mobile_phone,
+                "externalReference": str(user.id),
+                "notificationDisabled": False,
+            },
+        )
+
+    except AsaasError as exc:
+        status_code = exc.status_code
+
+        inconclusive = (
+            status_code is None
+            or status_code == 429
+            or status_code >= 500
+        )
+
+        # Timeout/5xx/429 não prova que a criação falhou.
+        # Antes de devolver erro, procuramos a mesma
+        # externalReference com backoff.
+        if inconclusive:
+            for delay in (
+                1.0,
+                2.0,
+                4.0,
+            ):
+                await asyncio.sleep(delay)
+
+                try:
+                    recovered_customer_id = (
+                        await _find_hardt_meet_asaas_customer_by_external_reference(
+                            user
+                        )
+                    )
+
+                except HTTPException:
+                    raise
+
+                except AsaasError:
+                    continue
+
+                if recovered_customer_id:
+                    return _persist_hardt_meet_asaas_customer_id(
+                        db,
+                        user,
+                        recovered_customer_id,
+                    )
+
+        raise HTTPException(
+            status_code=(
+                status_code
+                or status.HTTP_502_BAD_GATEWAY
+            ),
+            detail={
+                "message": (
+                    "Não foi possível criar o "
+                    "cliente no Asaas."
+                ),
+                "asaas": exc.response_data,
+            },
+        ) from exc
+
+    customer_id = result.get("id")
+
+    # Uma resposta formalmente bem-sucedida porém sem ID
+    # também é tratada como inconclusiva antes de permitirmos
+    # uma nova criação futura.
+    if not customer_id:
+        for delay in (
+            1.0,
+            2.0,
+            4.0,
+        ):
+            await asyncio.sleep(delay)
+
+            try:
+                recovered_customer_id = (
+                    await _find_hardt_meet_asaas_customer_by_external_reference(
+                        user
+                    )
+                )
+
+            except HTTPException:
+                raise
+
+            except AsaasError:
+                continue
+
+            if recovered_customer_id:
+                return _persist_hardt_meet_asaas_customer_id(
+                    db,
+                    user,
+                    recovered_customer_id,
+                )
+
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=(
+                "O Asaas não retornou o ID do cliente "
+                "e o cadastro não pôde ser reconciliado."
+            ),
+        )
+
+    return _persist_hardt_meet_asaas_customer_id(
+        db,
+        user,
+        str(customer_id),
+    )
 
 
 async def get_first_payment(
@@ -531,6 +747,318 @@ async def create_monthly_checkout(
     )
 
 
+def _checkout_applied_coupon(
+    charge: Charge,
+) -> str | None:
+    notes = charge.notes or ""
+
+    if "Cupom: JHONATAS30" in notes:
+        return "JHONATAS30"
+
+    return None
+
+
+async def _ensure_one_time_pix(
+    db: Session,
+    user: User,
+    product: Product,
+    charge: Charge,
+    *,
+    reconcile_before_create: bool,
+) -> OneTimeCheckoutResponse:
+    """
+    Reconcilia/reutiliza uma cobrança PIX já iniciada.
+
+    A Charge local e sua external_reference existem antes do
+    side effect no Asaas. Em retry/timeout:
+
+    1. reaproveita asaas_payment_id local, se existir;
+    2. senão consulta o Asaas pela externalReference;
+    3. só cria /payments se nenhuma cobrança correspondente existir.
+
+    A linha da Charge deve chegar aqui bloqueada com FOR UPDATE.
+    """
+
+    if not charge.external_reference:
+        db.rollback()
+
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "A cobrança pendente não possui referência "
+                "de reconciliação."
+            ),
+        )
+
+    if not user.asaas_customer_id:
+        db.rollback()
+
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Seu cadastro de pagamento ainda não está "
+                "disponível."
+            ),
+        )
+
+    payment_id = (
+        str(charge.asaas_payment_id)
+        if charge.asaas_payment_id
+        else None
+    )
+
+    payment: dict | None = None
+
+    try:
+        # Em retry/recovery, damos tempo para o Asaas
+        # materializar uma cobrança cujo POST anterior possa
+        # ter terminado de forma inconclusiva para o cliente.
+        if (
+            not payment_id
+            and reconcile_before_create
+        ):
+            retry_delays = (
+                0.5,
+                1.0,
+                2.0,
+            )
+
+            for attempt in range(4):
+                listed = await asaas_client.get(
+                    "/payments",
+                    params={
+                        "externalReference": (
+                            charge.external_reference
+                        ),
+                        "limit": 10,
+                        "offset": 0,
+                    },
+                )
+
+                rows = listed.get("data") or []
+
+                if len(rows) > 1:
+                    db.rollback()
+
+                    raise HTTPException(
+                        status_code=(
+                            status.HTTP_502_BAD_GATEWAY
+                        ),
+                        detail=(
+                            "Mais de uma cobrança Asaas foi "
+                            "encontrada para a mesma referência. "
+                            "O pagamento não será duplicado."
+                        ),
+                    )
+
+                if rows:
+                    payment = rows[0]
+                    payment_id = payment.get("id")
+                    break
+
+                if attempt < len(retry_delays):
+                    await asyncio.sleep(
+                        retry_delays[attempt]
+                    )
+
+        # Nenhum registro externo existe: cria uma única vez
+        # usando a external_reference já persistida localmente.
+        if not payment_id:
+            due_date = (
+                charge.due_at
+                .astimezone(
+                    ZoneInfo("America/Sao_Paulo")
+                )
+                .date()
+                .isoformat()
+            )
+
+            payment = await asaas_client.post(
+                "/payments",
+                json={
+                    "customer": user.asaas_customer_id,
+                    "billingType": "PIX",
+                    "value": float(charge.amount),
+                    "dueDate": due_date,
+                    "description": charge.description,
+                    "externalReference": (
+                        charge.external_reference
+                    ),
+                },
+            )
+
+            payment_id = payment.get("id")
+
+        if not payment_id:
+            db.rollback()
+
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=(
+                    "O Asaas não retornou o ID da "
+                    "cobrança PIX."
+                ),
+            )
+
+        if payment is None:
+            payment = await asaas_client.get(
+                f"/payments/{payment_id}"
+            )
+
+        pix = await asaas_client.get(
+            f"/payments/{payment_id}/pixQrCode"
+        )
+
+    except AsaasError as exc:
+        # Libera qualquer FOR UPDATE.
+        # A Charge já persistida permanece para reconciliação.
+        db.rollback()
+
+        raise HTTPException(
+            status_code=(
+                exc.status_code
+                or status.HTTP_502_BAD_GATEWAY
+            ),
+            detail={
+                "message": (
+                    "Não foi possível gerar ou recuperar "
+                    "o PIX do Hardt Meet."
+                ),
+                "asaas": exc.response_data,
+            },
+        ) from exc
+
+    pix_payload = pix.get("payload")
+    pix_image = pix.get("encodedImage")
+
+    if not pix_payload:
+        db.rollback()
+
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=(
+                "O Asaas não retornou o PIX Copia e Cola."
+            ),
+        )
+
+    invoice_url = (
+        payment.get("invoiceUrl")
+        or charge.invoice_url
+    )
+
+    charge.asaas_payment_id = str(payment_id)
+
+    if invoice_url:
+        charge.invoice_url = str(invoice_url)
+
+    db.add(charge)
+    db.commit()
+    db.refresh(charge)
+
+    return OneTimeCheckoutResponse(
+        charge_id=charge.id,
+        charge_number=charge.charge_number,
+        product_id=product.id,
+        product_name=product.name,
+        product_slug=product.slug,
+        amount=charge.amount,
+        status=charge.status,
+        invoice_url=charge.invoice_url,
+        asaas_customer_id=(
+            user.asaas_customer_id
+        ),
+        asaas_payment_id=str(payment_id),
+        pix_copy_paste=str(pix_payload),
+        pix_qr_code=(
+            str(pix_image)
+            if pix_image
+            else None
+        ),
+        applied_coupon=(
+            _checkout_applied_coupon(charge)
+        ),
+    )
+
+
+async def get_pending_one_time_checkout(
+    db: Session,
+    user: User,
+    product_slug: str,
+) -> OneTimeCheckoutResponse:
+    normalized_slug = (
+        product_slug
+        .strip()
+        .lower()
+    )
+
+    product = db.scalar(
+        select(Product).where(
+            Product.slug == normalized_slug,
+            Product.is_active.is_(True),
+        )
+    )
+
+    if product is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Produto não encontrado.",
+        )
+
+    existing_charge = db.scalar(
+        select(Charge)
+        .where(
+            Charge.user_id == user.id,
+            Charge.product_id == product.id,
+            Charge.status == "pending",
+            Charge.due_at >= utc_now(),
+            Charge.payment_method == "PIX",
+            Charge.license_id.is_(None),
+        )
+        .order_by(
+            Charge.created_at.desc()
+        )
+    )
+
+    if existing_charge is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                "Nenhum pagamento pendente foi "
+                "encontrado."
+            ),
+        )
+
+    # Bloqueia somente esta cobrança durante a reconciliação.
+    locked_charge = db.scalar(
+        select(Charge)
+        .where(
+            Charge.id == existing_charge.id
+        )
+        .with_for_update()
+        .execution_options(
+            populate_existing=True
+        )
+    )
+
+    if locked_charge is None:
+        db.rollback()
+
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                "A cobrança pendente não foi localizada."
+            ),
+        )
+
+    return await _ensure_one_time_pix(
+        db,
+        user,
+        product,
+        locked_charge,
+        reconcile_before_create=True,
+    )
+
+
 async def create_one_time_checkout(
     db: Session,
     user: User,
@@ -624,129 +1152,164 @@ async def create_one_time_checkout(
             f" | Cupom {applied_coupon}"
         )
 
-    customer_id = await ensure_asaas_customer(
+    # Serializa a criação/reuso do customer Asaas
+    # para o mesmo usuário.
+    locked_user = db.scalar(
+        select(User)
+        .where(
+            User.id == user.id
+        )
+        .with_for_update()
+        .execution_options(
+            populate_existing=True
+        )
+    )
+
+    if locked_user is None:
+        db.rollback()
+
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Usuário não encontrado.",
+        )
+
+    await ensure_hardt_meet_asaas_customer(
         db,
-        user,
+        locked_user,
         cpf_cnpj=cpf_cnpj,
         mobile_phone=mobile_phone,
     )
 
-    external_reference = (
-        f"hardt-meet:{user.id}:"
-        f"{int(datetime.now(timezone.utc).timestamp() * 1000000)}"
+    # ensure_hardt_meet_asaas_customer pode fazer commit quando cria
+    # o customer. Portanto readquirimos o lock antes de
+    # decidir sobre a Charge.
+    locked_user = db.scalar(
+        select(User)
+        .where(
+            User.id == user.id
+        )
+        .with_for_update()
+        .execution_options(
+            populate_existing=True
+        )
     )
 
-    try:
-        payment = await asaas_client.post(
-            "/payments",
-            json={
-                "customer": customer_id,
-                "billingType": "PIX",
-                "value": float(checkout_amount),
-                "dueDate": date.today().isoformat(),
-                "description": description,
-                "externalReference": external_reference,
-            },
-        )
-
-        payment_id = payment.get("id")
-
-        if not payment_id:
-            raise RuntimeError(
-                "Asaas não retornou o ID da cobrança PIX."
-            )
-
-        pix = await asaas_client.get(
-            f"/payments/{payment_id}/pixQrCode"
-        )
-
-        pix_payload = pix.get("payload")
-        pix_image = pix.get("encodedImage")
-
-        if not pix_payload:
-            raise RuntimeError(
-                "Asaas não retornou o PIX Copia e Cola."
-            )
-
-        invoice_url = payment.get("invoiceUrl")
-
-    except AsaasError as exc:
-        raise HTTPException(
-            status_code=(
-                exc.status_code
-                or status.HTTP_502_BAD_GATEWAY
-            ),
-            detail={
-                "message": (
-                    "Não foi possível gerar "
-                    "o PIX do Hardt Meet."
-                ),
-                "asaas": exc.response_data,
-            },
-        ) from exc
-
-    charge = Charge(
-        user_id=user.id,
-        product_id=product.id,
-        license_id=None,
-        charge_number=(
-            generate_charge_number(db)
-        ),
-        description=description,
-        amount=checkout_amount,
-        status="pending",
-        payment_method="PIX",
-        due_at=utc_now(),
-        paid_at=None,
-        cancelled_at=None,
-        refunded_at=None,
-        external_reference=external_reference,
-        notes=(
-            "Compra avulsa Hardt Meet via PIX. "
-            f"Celular informado: {mobile_phone}. "
-            f"Cupom: {applied_coupon or 'nenhum'}"
-        ),
-        asaas_payment_id=str(payment_id),
-        asaas_subscription_id=None,
-        invoice_url=(
-            str(invoice_url)
-            if invoice_url
-            else None
-        ),
-    )
-
-    db.add(charge)
-
-    try:
-        db.commit()
-    except Exception:
+    if locked_user is None:
         db.rollback()
-        raise
 
-    db.refresh(charge)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Usuário não encontrado.",
+        )
 
-    return OneTimeCheckoutResponse(
-        charge_id=charge.id,
-        charge_number=charge.charge_number,
-        product_id=product.id,
-        product_name=product.name,
-        product_slug=product.slug,
-        amount=checkout_amount,
-        status=charge.status,
-        invoice_url=(
-            str(invoice_url)
-            if invoice_url
-            else None
+    user = locked_user
+
+    existing_charge = db.scalar(
+        select(Charge)
+        .where(
+            Charge.user_id == user.id,
+            Charge.product_id == product.id,
+            Charge.status == "pending",
+            Charge.due_at >= utc_now(),
+            Charge.payment_method == "PIX",
+            Charge.license_id.is_(None),
+        )
+        .order_by(
+            Charge.created_at.desc()
+        )
+    )
+
+    if existing_charge is None:
+        brazil_now = datetime.now(
+            ZoneInfo("America/Sao_Paulo")
+        )
+
+        due_at = (
+            brazil_now
+            .replace(
+                hour=23,
+                minute=59,
+                second=59,
+                microsecond=999999,
+            )
+            .astimezone(timezone.utc)
+        )
+
+        external_reference = (
+            f"hardt-meet:{user.id}:"
+            f"{int(datetime.now(timezone.utc).timestamp() * 1000000)}"
+        )
+
+        charge = Charge(
+            user_id=user.id,
+            product_id=product.id,
+            license_id=None,
+            charge_number=(
+                generate_charge_number(db)
+            ),
+            description=description,
+            amount=checkout_amount,
+            status="pending",
+            payment_method="PIX",
+            due_at=due_at,
+            paid_at=None,
+            cancelled_at=None,
+            refunded_at=None,
+            external_reference=external_reference,
+            notes=(
+                "Compra avulsa Hardt Meet via PIX. "
+                f"Celular informado: {mobile_phone}. "
+                f"Cupom: {applied_coupon or 'nenhum'}"
+            ),
+            asaas_payment_id=None,
+            asaas_subscription_id=None,
+            invoice_url=None,
+        )
+
+        db.add(charge)
+
+        # CRÍTICO:
+        # persiste a intenção ANTES do side effect no Asaas.
+        db.commit()
+        db.refresh(charge)
+
+    else:
+        charge = existing_charge
+
+        # Libera o lock do User.
+        db.commit()
+
+    charge_id = charge.id
+
+    # A partir daqui somente uma requisição pode reconciliar/criar
+    # o pagamento externo desta Charge de cada vez.
+    locked_charge = db.scalar(
+        select(Charge)
+        .where(
+            Charge.id == charge_id
+        )
+        .with_for_update()
+        .execution_options(
+            populate_existing=True
+        )
+    )
+
+    if locked_charge is None:
+        db.rollback()
+
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Cobrança não encontrada.",
+        )
+
+    return await _ensure_one_time_pix(
+        db,
+        user,
+        product,
+        locked_charge,
+        reconcile_before_create=(
+            existing_charge is not None
         ),
-        asaas_customer_id=customer_id,
-        asaas_payment_id=str(payment_id),
-        pix_copy_paste=str(pix_payload),
-        pix_qr_code=(
-            str(pix_image)
-            if pix_image
-            else None
-        ),
-        applied_coupon=applied_coupon,
     )
 
 

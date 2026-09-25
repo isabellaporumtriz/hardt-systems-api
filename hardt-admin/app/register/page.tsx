@@ -18,6 +18,7 @@ import { useAuth } from "@/components/providers/auth-provider";
 import { login } from "@/lib/api/auth";
 import {
   createOneTimeCheckout,
+  resumeHardtMeetCheckout,
   type OneTimeCheckoutResponse,
 } from "@/lib/api/billing";
 import { registerUser } from "@/lib/api/registration";
@@ -31,6 +32,7 @@ export default function RegisterPage() {
   const {
     user,
     isLoading,
+    refreshUser,
   } = useAuth();
 
   const [name, setName] = useState("");
@@ -67,6 +69,12 @@ export default function RegisterPage() {
   const [statusMessage, setStatusMessage] =
     useState("");
 
+  const [recoveryError, setRecoveryError] =
+    useState("");
+
+  const [recoveryChecked, setRecoveryChecked] =
+    useState(false);
+
   useEffect(() => {
     if (
       isLoading
@@ -77,11 +85,56 @@ export default function RegisterPage() {
       return;
     }
 
-    router.replace(
-      user.is_admin
-        ? "/dashboard"
-        : "/portal/dashboard",
-    );
+    const authenticatedUser = user;
+
+    let cancelled = false;
+
+    async function recoverCheckout() {
+      setRecoveryError("");
+      setRecoveryChecked(false);
+
+      try {
+        const pending =
+          await resumeHardtMeetCheckout();
+
+        if (!cancelled) {
+          setPixCheckout(pending);
+        }
+      } catch (requestError) {
+        if (cancelled) {
+          return;
+        }
+
+        if (
+          axios.isAxiosError(requestError)
+          && requestError.response?.status === 404
+        ) {
+          if (authenticatedUser.is_admin) {
+            router.replace("/dashboard");
+            return;
+          }
+
+          setRecoveryChecked(true);
+          return;
+        }
+
+        console.error(
+          "ERRO RECUPERANDO PIX PENDENTE:",
+          requestError,
+        );
+
+        setRecoveryError(
+          "Não foi possível recuperar seu pagamento. "
+          + "Recarregue a página e tente novamente.",
+        );
+      }
+    }
+
+    void recoverCheckout();
+
+    return () => {
+      cancelled = true;
+    };
   }, [
     user,
     isLoading,
@@ -183,6 +236,8 @@ export default function RegisterPage() {
       saveAccessToken(
         loginResult.access_token,
       );
+
+      await refreshUser();
 
       setStatusMessage(
         "Criando seu pagamento...",
@@ -289,9 +344,122 @@ export default function RegisterPage() {
     }
   }
 
+  async function handleAuthenticatedCheckout(
+    event: FormEvent,
+  ) {
+    event.preventDefault();
+
+    setError("");
+    setStatusMessage("");
+
+    const normalizedPhone =
+      onlyDigits(mobilePhone);
+
+    const normalizedCpfCnpj =
+      onlyDigits(cpfCnpj);
+
+    if (
+      normalizedPhone.length !== 10
+      && normalizedPhone.length !== 11
+    ) {
+      setError(
+        "Informe um celular válido com DDD.",
+      );
+      return;
+    }
+
+    if (
+      normalizedCpfCnpj.length !== 11
+      && normalizedCpfCnpj.length !== 14
+    ) {
+      setError(
+        "Informe um CPF ou CNPJ válido.",
+      );
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      setStatusMessage(
+        "Criando seu pagamento...",
+      );
+
+      const checkout =
+        await createOneTimeCheckout({
+          product_slug:
+            HARDT_MEET_PRODUCT_SLUG,
+          mobile_phone:
+            normalizedPhone,
+          cpf_cnpj:
+            normalizedCpfCnpj,
+          coupon_code:
+            couponCode.trim()
+              ? couponCode.trim().toUpperCase()
+              : undefined,
+        });
+
+      if (!checkout.pix_copy_paste) {
+        throw new Error(
+          "Não foi possível gerar o PIX.",
+        );
+      }
+
+      setPixCheckout(checkout);
+      setStatusMessage("");
+    } catch (requestError) {
+      if (axios.isAxiosError(requestError)) {
+        const detail =
+          requestError.response
+            ?.data?.detail;
+
+        if (
+          typeof detail === "string"
+        ) {
+          setError(detail);
+        } else if (
+          typeof detail === "object"
+          && detail !== null
+          && "message" in detail
+        ) {
+          setError(
+            String(detail.message),
+          );
+        } else if (
+          Array.isArray(detail)
+          && detail.length > 0
+        ) {
+          setError(
+            detail[0]?.msg
+              ?? "Não foi possível gerar o pagamento.",
+          );
+        } else {
+          setError(
+            "Não foi possível gerar o pagamento.",
+          );
+        }
+      } else if (
+        requestError instanceof Error
+      ) {
+        setError(
+          requestError.message,
+        );
+      } else {
+        setError(
+          "Não foi possível gerar o pagamento.",
+        );
+      }
+
+      setStatusMessage("");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+
   if (
     isLoading
-    || (user && !pixCheckout)
+    || (user && !pixCheckout && !recoveryError && !recoveryChecked)
   ) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-zinc-950 text-white">
@@ -302,6 +470,139 @@ export default function RegisterPage() {
       </main>
     );
   }
+
+  if (
+    user
+    && !pixCheckout
+    && recoveryError
+  ) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-zinc-950 px-4 text-white">
+        <section className="w-full max-w-md rounded-2xl border border-red-500/20 bg-zinc-900/60 p-7 text-center">
+          <h1 className="text-xl font-semibold">
+            Falha ao recuperar pagamento
+          </h1>
+
+          <p className="mt-3 text-sm leading-6 text-zinc-400">
+            {recoveryError}
+          </p>
+
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="mt-6 flex h-12 w-full items-center justify-center rounded-xl bg-violet-600 text-sm font-semibold text-white transition hover:bg-violet-500"
+          >
+            Tentar novamente
+          </button>
+        </section>
+      </main>
+    );
+  }
+
+  if (
+    user
+    && recoveryChecked
+    && !pixCheckout
+  ) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-zinc-950 px-4 py-12 text-white">
+        <section className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900/60 p-7 shadow-2xl shadow-black/20">
+          <div className="text-center">
+            <div className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-400">
+              Hardt Meet
+            </div>
+
+            <h1 className="mt-3 text-2xl font-semibold">
+              Continue sua compra do Hardt Meet
+            </h1>
+
+            <p className="mt-2 text-sm leading-6 text-zinc-500">
+              Sua conta já está pronta. Informe os dados
+              de pagamento para gerar o PIX.
+            </p>
+          </div>
+
+          <form
+            onSubmit={handleAuthenticatedCheckout}
+            className="mt-7 space-y-4"
+          >
+            <div>
+              <label className="mb-2 block text-sm text-zinc-400">
+                Celular
+              </label>
+
+              <input
+                type="tel"
+                value={mobilePhone}
+                onChange={(event) =>
+                  setMobilePhone(event.target.value)
+                }
+                placeholder="(11) 99999-9999"
+                disabled={isSubmitting}
+                className="h-12 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 text-sm text-white outline-none transition focus:border-violet-500 disabled:opacity-50"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm text-zinc-400">
+                CPF ou CNPJ
+              </label>
+
+              <input
+                type="text"
+                value={cpfCnpj}
+                onChange={(event) =>
+                  setCpfCnpj(event.target.value)
+                }
+                placeholder="CPF ou CNPJ"
+                disabled={isSubmitting}
+                className="h-12 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 text-sm text-white outline-none transition focus:border-violet-500 disabled:opacity-50"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm text-zinc-400">
+                Cupom (opcional)
+              </label>
+
+              <input
+                type="text"
+                value={couponCode}
+                onChange={(event) =>
+                  setCouponCode(event.target.value)
+                }
+                placeholder="Cupom"
+                disabled={isSubmitting}
+                className="h-12 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 text-sm uppercase text-white outline-none transition focus:border-violet-500 disabled:opacity-50"
+              />
+            </div>
+
+            {error && (
+              <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                {error}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="flex h-12 w-full items-center justify-center rounded-xl bg-violet-600 text-sm font-semibold text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isSubmitting
+                ? statusMessage || "Gerando PIX..."
+                : "Gerar PIX"}
+            </button>
+
+            <p className="text-center text-xs leading-5 text-zinc-600">
+              A licença de 30 dias começa somente na
+              primeira ativação.
+            </p>
+          </form>
+        </section>
+      </main>
+    );
+  }
+
 
   if (pixCheckout) {
     const activePixCheckout = pixCheckout;
