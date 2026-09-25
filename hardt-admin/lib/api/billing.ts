@@ -39,6 +39,8 @@ export async function createMonthlyCheckout(
 export interface OneTimeCheckoutPayload {
   product_slug: string;
   mobile_phone: string;
+  cpf_cnpj: string;
+  coupon_code?: string;
 }
 
 export interface OneTimeCheckoutResponse {
@@ -52,10 +54,14 @@ export interface OneTimeCheckoutResponse {
   amount: string;
   status: string;
 
-  invoice_url: string;
+  invoice_url: string | null;
 
-  asaas_customer_id: string;
-  asaas_payment_id: string;
+  asaas_customer_id: string | null;
+  asaas_payment_id: string | null;
+
+  pix_copy_paste: string;
+  pix_qr_code: string | null;
+  applied_coupon: string | null;
 }
 
 export async function createOneTimeCheckout(

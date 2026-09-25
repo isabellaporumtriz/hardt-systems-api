@@ -84,6 +84,16 @@ class OneTimeCheckoutRequest(BaseModel):
         max_length=20,
     )
 
+    cpf_cnpj: str = Field(
+        min_length=11,
+        max_length=18,
+    )
+
+    coupon_code: str | None = Field(
+        default=None,
+        max_length=50,
+    )
+
 
 class OneTimeCheckoutResponse(BaseModel):
     charge_id: UUID
@@ -96,10 +106,14 @@ class OneTimeCheckoutResponse(BaseModel):
     amount: Decimal
     status: str
 
-    invoice_url: str
+    invoice_url: str | None
 
     asaas_customer_id: str | None
     asaas_payment_id: str | None
+
+    pix_copy_paste: str
+    pix_qr_code: str | None
+    applied_coupon: str | None
 
 
 # ============================================================

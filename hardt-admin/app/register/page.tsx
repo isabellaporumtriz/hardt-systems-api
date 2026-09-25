@@ -16,9 +16,14 @@ import {
 
 import { useAuth } from "@/components/providers/auth-provider";
 import { login } from "@/lib/api/auth";
-import { claimHardtMeetTrial } from "@/lib/api/client-licenses";
+import {
+  createOneTimeCheckout,
+  type OneTimeCheckoutResponse,
+} from "@/lib/api/billing";
 import { registerUser } from "@/lib/api/registration";
 import { saveAccessToken } from "@/lib/auth";
+
+const HARDT_MEET_PRODUCT_SLUG = "hardt-meet";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -33,6 +38,18 @@ export default function RegisterPage() {
 
   const [mobilePhone, setMobilePhone] =
     useState("");
+  const [cpfCnpj, setCpfCnpj] =
+    useState("");
+  const [couponCode, setCouponCode] =
+    useState("");
+
+  const [pixCheckout, setPixCheckout] =
+    useState<OneTimeCheckoutResponse | null>(
+      null,
+    );
+
+  const [copied, setCopied] =
+    useState(false);
 
   const [password, setPassword] =
     useState("");
@@ -51,7 +68,12 @@ export default function RegisterPage() {
     useState("");
 
   useEffect(() => {
-    if (isLoading || !user) {
+    if (
+      isLoading
+      || !user
+      || isSubmitting
+      || pixCheckout
+    ) {
       return;
     }
 
@@ -63,7 +85,9 @@ export default function RegisterPage() {
   }, [
     user,
     isLoading,
+    isSubmitting,
     router,
+    pixCheckout,
   ]);
 
   function onlyDigits(value: string) {
@@ -86,6 +110,9 @@ export default function RegisterPage() {
     const normalizedPhone =
       onlyDigits(mobilePhone);
 
+    const normalizedCpfCnpj =
+      onlyDigits(cpfCnpj);
+
     if (normalizedName.length < 2) {
       setError(
         "Informe um nome com pelo menos 2 caracteres.",
@@ -99,6 +126,16 @@ export default function RegisterPage() {
     ) {
       setError(
         "Informe um celular válido com DDD.",
+      );
+      return;
+    }
+
+    if (
+      normalizedCpfCnpj.length !== 11
+      && normalizedCpfCnpj.length !== 14
+    ) {
+      setError(
+        "Informe um CPF ou CNPJ válido.",
       );
       return;
     }
@@ -148,25 +185,31 @@ export default function RegisterPage() {
       );
 
       setStatusMessage(
-        "Liberando seus 7 dias grátis...",
+        "Criando seu pagamento...",
       );
 
-      const trial =
-        await claimHardtMeetTrial();
+      const checkout =
+        await createOneTimeCheckout({
+          product_slug:
+            HARDT_MEET_PRODUCT_SLUG,
+          mobile_phone:
+            normalizedPhone,
+          cpf_cnpj:
+            normalizedCpfCnpj,
+          coupon_code:
+            couponCode.trim()
+              ? couponCode.trim().toUpperCase()
+              : undefined,
+        });
 
-      if (!trial.id) {
+      if (!checkout.pix_copy_paste) {
         throw new Error(
-          "Não foi possível liberar o período gratuito.",
+          "Não foi possível gerar o PIX.",
         );
       }
 
-      setStatusMessage(
-        "Teste grátis liberado! Abrindo sua licença...",
-      );
-
-      window.location.assign(
-        "/portal/licenses",
-      );
+      setPixCheckout(checkout);
+      setStatusMessage("");
     } catch (requestError) {
       console.error(
         "ERRO CLIENTE ZERO:",
@@ -225,7 +268,7 @@ export default function RegisterPage() {
           );
         } else {
           setError(
-            "Não foi possível concluir o cadastro e liberar seu teste grátis.",
+            "Não foi possível concluir o cadastro e iniciar o pagamento.",
           );
         }
       } else if (
@@ -236,7 +279,7 @@ export default function RegisterPage() {
         );
       } else {
         setError(
-          "Não foi possível concluir o cadastro e liberar seu teste grátis.",
+          "Não foi possível concluir o cadastro e iniciar o pagamento.",
         );
       }
 
@@ -246,13 +289,130 @@ export default function RegisterPage() {
     }
   }
 
-  if (isLoading || user) {
+  if (
+    isLoading
+    || (user && !pixCheckout)
+  ) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-zinc-950 text-white">
         <LoaderCircle
           className="animate-spin text-violet-500"
           size={28}
         />
+      </main>
+    );
+  }
+
+  if (pixCheckout) {
+    const activePixCheckout = pixCheckout;
+
+    const formattedAmount =
+      new Intl.NumberFormat(
+        "pt-BR",
+        {
+          style: "currency",
+          currency: "BRL",
+        },
+      ).format(
+        Number(activePixCheckout.amount),
+      );
+
+    async function copyPixCode() {
+      await navigator.clipboard.writeText(
+        activePixCheckout.pix_copy_paste,
+      );
+
+      setCopied(true);
+
+      window.setTimeout(
+        () => setCopied(false),
+        2000,
+      );
+    }
+
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-zinc-950 px-4 py-12 text-white">
+        <section className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900/60 p-7 text-center shadow-2xl shadow-black/20">
+          <div className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-400">
+            Hardt Meet
+          </div>
+
+          <h1 className="mt-3 text-2xl font-semibold">
+            Pague com PIX
+          </h1>
+
+          <p className="mt-2 text-sm text-zinc-500">
+            Escaneie o QR Code ou copie o código PIX.
+          </p>
+
+          {activePixCheckout.applied_coupon && (
+            <div className="mt-5 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
+              Cupom{" "}
+              <strong>
+                {activePixCheckout.applied_coupon}
+              </strong>{" "}
+              aplicado ✓
+            </div>
+          )}
+
+          <div className="mt-6 text-3xl font-semibold text-white">
+            {formattedAmount}
+          </div>
+
+          {activePixCheckout.applied_coupon && (
+            <div className="mt-1 text-sm text-zinc-500 line-through">
+              R$ 139,90
+            </div>
+          )}
+
+          {activePixCheckout.pix_qr_code && (
+            <div className="mx-auto mt-6 w-fit rounded-2xl bg-white p-4">
+              <img
+                src={`data:image/png;base64,${activePixCheckout.pix_qr_code}`}
+                alt="QR Code PIX Hardt Meet"
+                className="h-52 w-52"
+              />
+            </div>
+          )}
+
+          <div className="mt-6 rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-left">
+            <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+              PIX Copia e Cola
+            </p>
+
+            <p className="mt-2 max-h-24 overflow-auto break-all text-xs text-zinc-300">
+              {activePixCheckout.pix_copy_paste}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={copyPixCode}
+            className="mt-4 flex h-12 w-full items-center justify-center rounded-xl bg-violet-600 text-sm font-semibold text-white transition hover:bg-violet-500"
+          >
+            {copied
+              ? "Código PIX copiado ✓"
+              : "Copiar código PIX"}
+          </button>
+
+          <button
+            type="button"
+            onClick={() =>
+              window.location.assign(
+                "/portal/licenses",
+              )
+            }
+            className="mt-3 flex h-12 w-full items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900 text-sm font-semibold text-zinc-200 transition hover:bg-zinc-800"
+          >
+            Já paguei — Ver minha licença
+          </button>
+
+          <p className="mt-5 text-xs leading-5 text-zinc-600">
+            Após a confirmação do PIX, sua licença será
+            liberada. Os 30 dias começam apenas na
+            primeira ativação.
+          </p>
+        </section>
       </main>
     );
   }
@@ -274,8 +434,8 @@ export default function RegisterPage() {
           </h1>
 
           <p className="mt-2 text-sm text-zinc-500">
-            Crie sua conta e teste o Hardt Meet
-            grátis por 7 dias.
+            Crie sua conta e adquira o Hardt Meet
+            com licença de 30 dias.
           </p>
         </div>
 
@@ -355,6 +515,58 @@ export default function RegisterPage() {
               }
               placeholder="(11) 99999-9999"
               className="mt-2 h-12 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-violet-500"
+            />
+          </div>
+
+          <div className="mt-5">
+            <label
+              htmlFor="cpfCnpj"
+              className="text-sm font-medium text-zinc-300"
+            >
+              CPF ou CNPJ
+            </label>
+
+            <input
+              id="cpfCnpj"
+              type="text"
+              required
+              inputMode="numeric"
+              autoComplete="off"
+              value={cpfCnpj}
+              onChange={(event) =>
+                setCpfCnpj(
+                  event.target.value,
+                )
+              }
+              placeholder="CPF ou CNPJ"
+              className="mt-2 h-12 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-violet-500"
+            />
+          </div>
+
+          <div className="mt-5">
+            <label
+              htmlFor="couponCode"
+              className="text-sm font-medium text-zinc-300"
+            >
+              Cupom
+              <span className="ml-1 text-zinc-600">
+                (opcional)
+              </span>
+            </label>
+
+            <input
+              id="couponCode"
+              type="text"
+              maxLength={50}
+              autoComplete="off"
+              value={couponCode}
+              onChange={(event) =>
+                setCouponCode(
+                  event.target.value.toUpperCase(),
+                )
+              }
+              placeholder="Digite seu cupom"
+              className="mt-2 h-12 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 text-sm uppercase text-white outline-none transition placeholder:normal-case placeholder:text-zinc-600 focus:border-violet-500"
             />
           </div>
 

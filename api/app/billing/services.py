@@ -7,7 +7,7 @@ from datetime import (
     datetime,
     timezone,
 )
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -540,6 +540,10 @@ async def create_one_time_checkout(
         payload.mobile_phone
     )
 
+    cpf_cnpj = validate_document(
+        payload.cpf_cnpj
+    )
+
     normalized_slug = (
         payload.product_slug
         .strip()
@@ -569,36 +573,102 @@ async def create_one_time_checkout(
             ),
         )
 
+    base_amount = Decimal(product.price)
+
+    coupon_code = (
+        payload.coupon_code
+        or ""
+    ).strip().upper()
+
+    checkout_amount = base_amount
+    applied_coupon = None
+
+    if coupon_code:
+        if (
+            coupon_code == "JHONATAS30"
+            and normalized_slug == "hardt-meet"
+        ):
+            discount_rate = Decimal("0.2859")
+
+            checkout_amount = (
+                base_amount
+                * (
+                    Decimal("1")
+                    - discount_rate
+                )
+            ).quantize(
+                Decimal("0.01"),
+                rounding=ROUND_HALF_UP,
+            )
+
+            applied_coupon = coupon_code
+
+        else:
+            raise HTTPException(
+                status_code=(
+                    status.HTTP_422_UNPROCESSABLE_ENTITY
+                ),
+                detail=(
+                    "Cupom inválido ou não aplicável "
+                    "a este produto."
+                ),
+            )
+
     description = (
         f"Licença {product.name} "
         f"por {product.license_duration_days or 30} dias"
     )
 
+    if applied_coupon:
+        description += (
+            f" | Cupom {applied_coupon}"
+        )
+
+    customer_id = await ensure_asaas_customer(
+        db,
+        user,
+        cpf_cnpj=cpf_cnpj,
+        mobile_phone=mobile_phone,
+    )
+
+    external_reference = (
+        f"hardt-meet:{user.id}:"
+        f"{int(datetime.now(timezone.utc).timestamp() * 1000000)}"
+    )
+
     try:
-        payment_link = await asaas_client.post(
-            "/paymentLinks",
+        payment = await asaas_client.post(
+            "/payments",
             json={
-                "name": product.name,
+                "customer": customer_id,
+                "billingType": "PIX",
+                "value": float(checkout_amount),
+                "dueDate": date.today().isoformat(),
                 "description": description,
-                "value": float(
-                    Decimal(product.price)
-                ),
-                "billingType": "UNDEFINED",
-                "chargeType": "DETACHED",
-                "dueDateLimitDays": 1,
-                "notificationEnabled": False,
-                "isAddressRequired": False,
-                "externalReference": (
-                    f"{user.id}:{product.id}"
-                ),
-                "callback": {
-                    "successUrl": (
-                        f"{settings.frontend_url.rstrip('/')}/login"
-                    ),
-                    "autoRedirect": True,
-                },
+                "externalReference": external_reference,
             },
         )
+
+        payment_id = payment.get("id")
+
+        if not payment_id:
+            raise RuntimeError(
+                "Asaas não retornou o ID da cobrança PIX."
+            )
+
+        pix = await asaas_client.get(
+            f"/payments/{payment_id}/pixQrCode"
+        )
+
+        pix_payload = pix.get("payload")
+        pix_image = pix.get("encodedImage")
+
+        if not pix_payload:
+            raise RuntimeError(
+                "Asaas não retornou o PIX Copia e Cola."
+            )
+
+        invoice_url = payment.get("invoiceUrl")
 
     except AsaasError as exc:
         raise HTTPException(
@@ -608,24 +678,12 @@ async def create_one_time_checkout(
             ),
             detail={
                 "message": (
-                    "Não foi possível criar "
-                    "o link de pagamento no Asaas."
+                    "Não foi possível gerar "
+                    "o PIX do Hardt Meet."
                 ),
                 "asaas": exc.response_data,
             },
         ) from exc
-
-    payment_link_id = payment_link.get("id")
-    payment_link_url = payment_link.get("url")
-
-    if not payment_link_id or not payment_link_url:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=(
-                "O Asaas não retornou o link "
-                "de pagamento."
-            ),
-        )
 
     charge = Charge(
         user_id=user.id,
@@ -635,30 +693,25 @@ async def create_one_time_checkout(
             generate_charge_number(db)
         ),
         description=description,
-        amount=Decimal(product.price),
+        amount=checkout_amount,
         status="pending",
-        payment_method=None,
+        payment_method="PIX",
         due_at=utc_now(),
         paid_at=None,
         cancelled_at=None,
         refunded_at=None,
-
-        # Guardamos o ID do Payment Link aqui.
-        # Quando o webhook PAYMENT_* chegar,
-        # payment.paymentLink terá este mesmo ID.
-        external_reference=str(
-            payment_link_id
-        ),
-
+        external_reference=external_reference,
         notes=(
-            "Compra avulsa criada por "
-            "Payment Link Asaas. "
-            f"Celular informado: {mobile_phone}"
+            "Compra avulsa Hardt Meet via PIX. "
+            f"Celular informado: {mobile_phone}. "
+            f"Cupom: {applied_coupon or 'nenhum'}"
         ),
-        asaas_payment_id=None,
+        asaas_payment_id=str(payment_id),
         asaas_subscription_id=None,
-        invoice_url=str(
-            payment_link_url
+        invoice_url=(
+            str(invoice_url)
+            if invoice_url
+            else None
         ),
     )
 
@@ -678,11 +731,22 @@ async def create_one_time_checkout(
         product_id=product.id,
         product_name=product.name,
         product_slug=product.slug,
-        amount=Decimal(product.price),
+        amount=checkout_amount,
         status=charge.status,
-        invoice_url=str(payment_link_url),
-        asaas_customer_id=None,
-        asaas_payment_id=None,
+        invoice_url=(
+            str(invoice_url)
+            if invoice_url
+            else None
+        ),
+        asaas_customer_id=customer_id,
+        asaas_payment_id=str(payment_id),
+        pix_copy_paste=str(pix_payload),
+        pix_qr_code=(
+            str(pix_image)
+            if pix_image
+            else None
+        ),
+        applied_coupon=applied_coupon,
     )
 
 

@@ -413,6 +413,14 @@ def claim_hardt_meet_trial(
     ),
     db: Session = Depends(get_db),
 ) -> LicenseTrialResponse:
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail=(
+            "O teste grátis do Hardt Meet "
+            "foi descontinuado."
+        ),
+    )
+
     try:
         result = issue_hardt_meet_trial(
             db,
